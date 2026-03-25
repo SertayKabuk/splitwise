@@ -48,6 +48,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
+# Create data directory with correct ownership for SQLite
+RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
+
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
 
