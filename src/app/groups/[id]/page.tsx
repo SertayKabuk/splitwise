@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import getDb from "@/lib/db";
 import { calculateBalances } from "@/lib/balance";
@@ -10,7 +9,7 @@ interface PageProps {
 }
 
 export default async function GroupPage({ params }: PageProps) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     redirect("/");
   }

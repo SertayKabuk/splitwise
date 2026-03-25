@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import getDb from "@/lib/db";
 
 interface RouteParams {
@@ -8,7 +7,7 @@ interface RouteParams {
 }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -51,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

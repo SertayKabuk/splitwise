@@ -1,11 +1,12 @@
-import { NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
+import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
 import { randomUUID } from "crypto";
 import getDb from "./db";
+import type { NextAuthConfig } from "next-auth";
 
-export const authOptions: NextAuthOptions = {
+const config: NextAuthConfig = {
   providers: [
-    GoogleProvider({
+    Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
@@ -73,3 +74,5 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+export const { auth, handlers, signIn, signOut } = NextAuth(config);

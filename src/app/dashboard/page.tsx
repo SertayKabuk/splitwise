@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import getDb from "@/lib/db";
 import Link from "next/link";
@@ -17,7 +16,7 @@ interface GroupRow {
 }
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     redirect("/");
   }
