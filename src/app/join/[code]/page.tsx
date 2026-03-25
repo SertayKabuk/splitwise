@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import getDb from "@/lib/db";
 import JoinGroupClient from "./JoinGroupClient";
@@ -9,7 +8,7 @@ interface PageProps {
 }
 
 export default async function JoinPage({ params }: PageProps) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   const db = getDb();
   const { code } = await params;
 
