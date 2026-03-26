@@ -2,27 +2,30 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Member, Expense, Balance, Group } from "./types";
+import type { Member, Expense, Balance, Group, Settlement } from "./types";
 import { ExpensesTab } from "./ExpensesTab";
 import { BalancesTab } from "./BalancesTab";
 import { MembersTab } from "./MembersTab";
 import { InsightsTab } from "./InsightsTab";
+import { TransactionsTab } from "./TransactionsTab";
 
 interface Props {
   group: Group;
   members: Member[];
   expenses: Expense[];
   balances: Balance[];
+  settlements: Settlement[];
   currentUserId: string;
 }
 
-type Tab = "expenses" | "balances" | "members" | "insights";
+type Tab = "expenses" | "balances" | "transactions" | "members" | "insights";
 
 export default function GroupPageClient({
   group,
   members,
   expenses: initialExpenses,
   balances: initialBalances,
+  settlements: initialSettlements,
   currentUserId,
 }: Props) {
   const router = useRouter();
@@ -30,8 +33,30 @@ export default function GroupPageClient({
   const [copied, setCopied] = useState(false);
   const [expenseList, setExpenseList] = useState<Expense[]>(initialExpenses);
   const [balances, setBalances] = useState<Balance[]>(initialBalances);
+  const [settlements, setSettlements] = useState<Settlement[]>(initialSettlements);
   const [showDeleteGroup, setShowDeleteGroup] = useState(false);
   const [deleteGroupLoading, setDeleteGroupLoading] = useState(false);
+
+  const refreshBalancesAndSettlements = async () => {
+    const [balancesRes, settlementsRes] = await Promise.all([
+      fetch(`/api/groups/${group.id}/balances`),
+      fetch(`/api/groups/${group.id}/settlements`),
+    ]);
+
+    if (!balancesRes.ok) {
+      const data = await balancesRes.json().catch(() => null);
+      throw new Error(data?.error ?? "Failed to refresh balances");
+    }
+
+    if (!settlementsRes.ok) {
+      const data = await settlementsRes.json().catch(() => null);
+      throw new Error(data?.error ?? "Failed to refresh transactions");
+    }
+
+    const [nextBalances, nextSettlements] = await Promise.all([balancesRes.json(), settlementsRes.json()]);
+    setBalances(nextBalances);
+    setSettlements(nextSettlements);
+  };
 
   const handleCopyInvite = () => {
     const url = `${window.location.origin}/join/${group.invite_code}`;
@@ -108,7 +133,7 @@ export default function GroupPageClient({
       {/* Tabs */}
       <div className="border-b border-slate-200 mb-6 overflow-x-auto">
         <nav className="flex gap-1 min-w-max">
-          {(["expenses", "balances", "members", "insights"] as Tab[]).map((tab) => (
+          {(["expenses", "balances", "transactions", "members", "insights"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -127,6 +152,11 @@ export default function GroupPageClient({
               {tab === "balances" && balances.length > 0 && (
                 <span className="ml-1.5 bg-red-100 text-red-600 text-xs px-1.5 py-0.5 rounded-full">
                   {balances.length}
+                </span>
+              )}
+              {tab === "transactions" && settlements.length > 0 && (
+                <span className="ml-1.5 bg-emerald-100 text-emerald-700 text-xs px-1.5 py-0.5 rounded-full">
+                  {settlements.length}
                 </span>
               )}
             </button>
@@ -152,8 +182,11 @@ export default function GroupPageClient({
           balances={balances}
           members={members}
           currentUserId={currentUserId}
-          onBalancesChange={setBalances}
+          onSettlementRecorded={refreshBalancesAndSettlements}
         />
+      )}
+      {activeTab === "transactions" && (
+        <TransactionsTab settlements={settlements} members={members} currentUserId={currentUserId} />
       )}
       {activeTab === "members" && (
         <MembersTab members={members} group={group} currentUserId={currentUserId} />

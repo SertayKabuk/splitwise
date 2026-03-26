@@ -38,6 +38,17 @@ export interface Balance {
   currency: string;
 }
 
+export interface Settlement {
+  id: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: number;
+  currency: string;
+  settledAt: number;
+}
+
 export interface Group {
   id: string;
   name: string;

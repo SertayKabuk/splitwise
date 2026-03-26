@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import getDb from "@/lib/db";
 import { calculateBalances } from "@/lib/balance";
 import GroupPageClient from "./GroupPageClient";
+import type { Settlement } from "./types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -112,12 +113,35 @@ export default async function GroupPage({ params }: PageProps) {
 
   // Fetch settlements
   const rawSettlements = db
-    .prepare("SELECT from_user, to_user, amount, currency, settled_at FROM settlements WHERE group_id = ?")
-    .all(groupId) as Array<{ from_user: string; to_user: string; amount: number; currency: string; settled_at: number }>;
+    .prepare(
+      `SELECT s.id, s.from_user, s.to_user, s.amount, s.currency, s.settled_at,
+              fu.name as from_name, fu.email as from_email,
+              tu.name as to_name, tu.email as to_email
+       FROM settlements s
+       JOIN users fu ON s.from_user = fu.id
+       JOIN users tu ON s.to_user = tu.id
+       WHERE s.group_id = ?
+       ORDER BY s.settled_at DESC`
+    )
+    .all(groupId) as Array<{
+      id: string;
+      from_user: string;
+      to_user: string;
+      amount: number;
+      currency: string;
+      settled_at: number;
+      from_name: string | null;
+      from_email: string;
+      to_name: string | null;
+      to_email: string;
+    }>;
 
-  const settlements = rawSettlements.map((s) => ({
-    fromUser: s.from_user,
-    toUser: s.to_user,
+  const settlements: Settlement[] = rawSettlements.map((s) => ({
+    id: s.id,
+    fromUserId: s.from_user,
+    fromUserName: s.from_name ?? s.from_email,
+    toUserId: s.to_user,
+    toUserName: s.to_name ?? s.to_email,
     amount: s.amount,
     currency: s.currency,
     settledAt: s.settled_at,
@@ -142,6 +166,7 @@ export default async function GroupPage({ params }: PageProps) {
       members={members}
       expenses={expenses}
       balances={balances}
+      settlements={settlements}
       currentUserId={session.user.id}
     />
   );

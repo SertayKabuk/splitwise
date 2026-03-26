@@ -50,6 +50,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!currency || !(currency in CURRENCIES)) {
     return NextResponse.json({ error: "A valid currency is required" }, { status: 400 });
   }
+  if (fromUser !== session.user.id) {
+    return NextResponse.json({ error: "You can only settle your own debts" }, { status: 403 });
+  }
 
   // Validate both users are group members
   const fromMembership = db

@@ -10,10 +10,10 @@ interface Props {
   balances: Balance[];
   members: Member[];
   currentUserId: string;
-  onBalancesChange: (balances: Balance[]) => void;
+  onSettlementRecorded: () => Promise<void> | void;
 }
 
-export function BalancesTab({ groupId, balances, members, currentUserId, onBalancesChange }: Props) {
+export function BalancesTab({ groupId, balances, members, currentUserId, onSettlementRecorded }: Props) {
   const fmt = (amount: number, currency: string) => formatAmount(amount, currency as CurrencyCode);
   const memberMap = new Map(members.map((m) => [m.id, m]));
 
@@ -38,8 +38,7 @@ export function BalancesTab({ groupId, balances, members, currentUserId, onBalan
         const data = await res.json();
         throw new Error(data.error ?? "Failed to record settlement");
       }
-      const balancesRes = await fetch(`/api/groups/${groupId}/balances`);
-      if (balancesRes.ok) onBalancesChange(await balancesRes.json());
+      await onSettlementRecorded();
       setSettleDebt(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "An error occurred");
@@ -86,12 +85,14 @@ export function BalancesTab({ groupId, balances, members, currentUserId, onBalan
               </div>
               <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
                 <span className="font-bold text-red-500 text-lg">{fmt(balance.amount, balance.currency)}</span>
-                <button
-                  onClick={() => setSettleDebt(balance)}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium text-sm rounded-lg transition-colors"
-                >
-                  Settle
-                </button>
+                {balance.fromUserId === currentUserId && (
+                  <button
+                    onClick={() => setSettleDebt(balance)}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium text-sm rounded-lg transition-colors"
+                  >
+                    Settle
+                  </button>
+                )}
               </div>
             </div>
           ))}
