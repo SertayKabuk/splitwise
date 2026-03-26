@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import getDb from "@/lib/db";
 import Link from "next/link";
 import CreateGroupForm from "./CreateGroupForm";
+import DeleteGroupButton from "./DeleteGroupButton";
 
 interface GroupRow {
   id: string;
@@ -42,6 +43,8 @@ export default async function DashboardPage() {
     `
     )
     .all(session.user.id) as GroupRow[];
+
+  const currentUserId = session.user.id;
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -95,10 +98,15 @@ export default async function DashboardPage() {
                     </p>
                   )}
                 </div>
-                <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center ml-3">
-                  <span className="text-indigo-600 font-bold text-sm">
-                    {group.name.charAt(0).toUpperCase()}
-                  </span>
+                <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                  {group.created_by === currentUserId && (
+                    <DeleteGroupButton groupId={group.id} />
+                  )}
+                  <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <span className="text-indigo-600 font-bold text-sm">
+                      {group.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
                 </div>
               </div>
 

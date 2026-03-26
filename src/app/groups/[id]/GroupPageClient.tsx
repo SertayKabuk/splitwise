@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { CURRENCIES, formatAmount, type CurrencyCode } from "@/lib/currencies";
 import { getInitials } from "@/lib/initials";
@@ -119,6 +120,7 @@ export default function GroupPageClient({
   settlements,
   currentUserId,
 }: Props) {
+  const router = useRouter();
   const fmt = (amount: number, currency: string) => formatAmount(amount, currency as CurrencyCode);
   const [activeTab, setActiveTab] = useState<Tab>("expenses");
   const [copied, setCopied] = useState(false);
@@ -151,9 +153,13 @@ export default function GroupPageClient({
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
-  // Delete confirmation
+  // Delete expense confirmation
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Delete group confirmation
+  const [showDeleteGroup, setShowDeleteGroup] = useState(false);
+  const [deleteGroupLoading, setDeleteGroupLoading] = useState(false);
 
   // View expense details modal
   const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
@@ -363,6 +369,24 @@ export default function GroupPageClient({
     }
   };
 
+  const handleDeleteGroup = async () => {
+    setDeleteGroupLoading(true);
+    try {
+      const res = await fetch(`/api/groups/${group.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error ?? "Failed to delete group");
+        return;
+      }
+      router.push("/dashboard");
+    } catch {
+      alert("Failed to delete group");
+    } finally {
+      setDeleteGroupLoading(false);
+      setShowDeleteGroup(false);
+    }
+  };
+
   const memberMap = new Map(members.map((m) => [m.id, m]));
 
   return (
@@ -378,6 +402,18 @@ export default function GroupPageClient({
             {members.length} member{members.length !== 1 ? "s" : ""}
           </p>
         </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {group.created_by === currentUserId && (
+            <button
+              onClick={() => setShowDeleteGroup(true)}
+              className="p-2.5 border border-slate-200 hover:border-red-300 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg transition-all"
+              title="Delete group"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
         <button
           onClick={handleCopyInvite}
           className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 font-medium rounded-lg transition-all text-sm"
@@ -398,6 +434,7 @@ export default function GroupPageClient({
             </>
           )}
         </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1283,6 +1320,36 @@ export default function GroupPageClient({
                 className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
               >
                 {settleLoading ? "Settling..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Group Confirmation Modal */}
+      {showDeleteGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteGroup(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-xl font-semibold text-slate-900 mb-2">Delete Group</h2>
+            <p className="text-slate-600 mb-6">
+              Are you sure you want to delete{" "}
+              <span className="font-semibold">&ldquo;{group.name}&rdquo;</span>?
+              This will permanently delete all expenses, splits, and settlements in this group.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteGroup(false)}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteGroup}
+                disabled={deleteGroupLoading}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+              >
+                {deleteGroupLoading ? "Deleting..." : "Delete Group"}
               </button>
             </div>
           </div>
