@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { CURRENCIES, formatAmount, type CurrencyCode } from "@/lib/currencies";
 import { getInitials } from "@/lib/initials";
@@ -27,6 +26,7 @@ interface Expense {
   id: string;
   title: string;
   amount: number;
+  currency: string;
   paid_by: string;
   created_at: number;
   payer_name: string | null;
@@ -40,12 +40,14 @@ interface Balance {
   toUserId: string;
   toUserName: string;
   amount: number;
+  currency: string;
 }
 
 interface Settlement {
   fromUser: string;
   toUser: string;
   amount: number;
+  currency: string;
   settledAt: number;
 }
 
@@ -56,7 +58,6 @@ interface Group {
   invite_code: string;
   created_by: string;
   created_at: number;
-  currency: string;
 }
 
 interface Props {
@@ -116,8 +117,7 @@ export default function GroupPageClient({
   settlements,
   currentUserId,
 }: Props) {
-  const router = useRouter();
-  const fmt = (amount: number) => formatAmount(amount, group.currency as CurrencyCode);
+  const fmt = (amount: number, currency: string) => formatAmount(amount, currency as CurrencyCode);
   const [activeTab, setActiveTab] = useState<Tab>("expenses");
   const [copied, setCopied] = useState(false);
   const [balances, setBalances] = useState<Balance[]>(initialBalances);
@@ -127,6 +127,7 @@ export default function GroupPageClient({
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [expenseTitle, setExpenseTitle] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseCurrency, setExpenseCurrency] = useState<CurrencyCode>("TRY");
   const [expensePaidBy, setExpensePaidBy] = useState(currentUserId);
   const [expenseSplitWith, setExpenseSplitWith] = useState<string[]>(members.map((m) => m.id));
   const [expenseSplitType, setExpenseSplitType] = useState<"equal" | "shares">("equal");
@@ -140,6 +141,7 @@ export default function GroupPageClient({
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
+  const [editCurrency, setEditCurrency] = useState<CurrencyCode>("TRY");
   const [editPaidBy, setEditPaidBy] = useState(currentUserId);
   const [editSplitWith, setEditSplitWith] = useState<string[]>([]);
   const [editSplitType, setEditSplitType] = useState<"equal" | "shares">("equal");
@@ -202,6 +204,7 @@ export default function GroupPageClient({
         body: JSON.stringify({
           title: expenseTitle.trim(),
           amount,
+          currency: expenseCurrency,
           paidBy: expensePaidBy,
           splitType: expenseSplitType,
           splitWith: expenseSplitWith.map((userId) => ({
@@ -228,6 +231,7 @@ export default function GroupPageClient({
       setShowAddExpense(false);
       setExpenseTitle("");
       setExpenseAmount("");
+      setExpenseCurrency("TRY");
       setExpensePaidBy(currentUserId);
       setExpenseSplitWith(members.map((m) => m.id));
       setExpenseSplitType("equal");
@@ -251,6 +255,7 @@ export default function GroupPageClient({
           fromUser: settleDebt.fromUserId,
           toUser: settleDebt.toUserId,
           amount: settleDebt.amount,
+          currency: settleDebt.currency,
         }),
       });
 
@@ -275,6 +280,7 @@ export default function GroupPageClient({
     setEditingExpense(expense);
     setEditTitle(expense.title);
     setEditAmount(String(expense.amount));
+    setEditCurrency(expense.currency as CurrencyCode);
     setEditPaidBy(expense.paid_by);
     const splitIds = expense.splits.map((s) => s.user_id);
     setEditSplitWith(splitIds);
@@ -300,6 +306,7 @@ export default function GroupPageClient({
         body: JSON.stringify({
             title: editTitle.trim(),
             amount,
+            currency: editCurrency,
             paidBy: editPaidBy,
             splitType: editSplitType,
             splitWith: editSplitWith.map((userId) => ({
@@ -363,7 +370,7 @@ export default function GroupPageClient({
             <p className="text-slate-500 mt-1">{group.description}</p>
           )}
           <p className="text-slate-400 text-sm mt-1">
-            {members.length} member{members.length !== 1 ? "s" : ""} · {CURRENCIES[group.currency as CurrencyCode]?.name ?? group.currency}
+            {members.length} member{members.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button
@@ -481,13 +488,19 @@ export default function GroupPageClient({
                   </div>
                   <div className="text-right flex-shrink-0 flex flex-col items-end gap-2">
                     <p className="text-lg font-bold text-emerald-600">
-                      {fmt(expense.amount)}
+                      {fmt(expense.amount, expense.currency)}
                     </p>
-                    {expense.splits.length > 0 && (
-                      <p className="text-xs text-slate-400">
-                        {fmt(expense.amount / expense.splits.length)} each
-                      </p>
-                    )}
+                    {expense.splits.length > 0 && (() => {
+                      const mySplit = expense.splits.find((s) => s.user_id === currentUserId);
+                      if (mySplit) {
+                        return (
+                          <p className="text-xs text-slate-400">
+                            Your share: {fmt(mySplit.amount, expense.currency)}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => openEdit(expense)}
@@ -555,7 +568,7 @@ export default function GroupPageClient({
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
                     <span className="font-bold text-red-500 text-lg">
-                      {fmt(balance.amount)}
+                      {fmt(balance.amount, balance.currency)}
                     </span>
                     <button
                       onClick={() => setSettleDebt(balance)}
@@ -648,7 +661,24 @@ export default function GroupPageClient({
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Amount ({CURRENCIES[group.currency as CurrencyCode]?.symbol ?? group.currency}) <span className="text-red-500">*</span>
+                  Currency <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={expenseCurrency}
+                  onChange={(e) => setExpenseCurrency(e.target.value as CurrencyCode)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
+                    <option key={code} value={code}>
+                      {CURRENCIES[code].symbol} — {CURRENCIES[code].name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Amount ({CURRENCIES[expenseCurrency].symbol}) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -757,7 +787,7 @@ export default function GroupPageClient({
                     <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
                       Each person pays:{" "}
                       <span className="font-semibold text-slate-700">
-                        {fmt(totalAmount / expenseSplitWith.length)}
+                        {fmt(totalAmount / expenseSplitWith.length, expenseCurrency)}
                       </span>
                     </p>
                   );
@@ -775,7 +805,7 @@ export default function GroupPageClient({
                             <span className="text-slate-400 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
                           </span>
                           <span className="font-semibold text-slate-700">
-                            {fmt(totalAmount * myShares / totalShares)}
+                            {fmt(totalAmount * myShares / totalShares, expenseCurrency)}
                           </span>
                         </div>
                       );
@@ -835,7 +865,21 @@ export default function GroupPageClient({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount ({CURRENCIES[group.currency as CurrencyCode]?.symbol ?? group.currency}) <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Currency <span className="text-red-500">*</span></label>
+                <select
+                  value={editCurrency}
+                  onChange={(e) => setEditCurrency(e.target.value as CurrencyCode)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
+                    <option key={code} value={code}>
+                      {CURRENCIES[code].symbol} — {CURRENCIES[code].name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount ({CURRENCIES[editCurrency].symbol}) <span className="text-red-500">*</span></label>
                 <input
                   type="number"
                   value={editAmount}
@@ -939,7 +983,7 @@ export default function GroupPageClient({
                     <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
                       Each person pays:{" "}
                       <span className="font-semibold text-slate-700">
-                        {fmt(totalAmount / editSplitWith.length)}
+                        {fmt(totalAmount / editSplitWith.length, editCurrency)}
                       </span>
                     </p>
                   );
@@ -957,7 +1001,7 @@ export default function GroupPageClient({
                             <span className="text-slate-400 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
                           </span>
                           <span className="font-semibold text-slate-700">
-                            {fmt(totalAmount * myShares / totalShares)}
+                            {fmt(totalAmount * myShares / totalShares, editCurrency)}
                           </span>
                         </div>
                       );
@@ -1103,7 +1147,7 @@ export default function GroupPageClient({
               </span>{" "}
               paid{" "}
               <span className="font-semibold text-emerald-600">
-                {fmt(settleDebt.amount)}
+                {fmt(settleDebt.amount, settleDebt.currency)}
               </span>{" "}
               to{" "}
               <span className="font-semibold">

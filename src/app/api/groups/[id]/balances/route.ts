@@ -40,9 +40,9 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   // Fetch expenses with splits
   const rawExpenses = db
     .prepare(
-      "SELECT id, paid_by, amount FROM expenses WHERE group_id = ?"
+      "SELECT id, paid_by, amount, currency FROM expenses WHERE group_id = ?"
     )
-    .all(groupId) as Array<{ id: string; paid_by: string; amount: number }>;
+    .all(groupId) as Array<{ id: string; paid_by: string; amount: number; currency: string }>;
 
   const rawSplits = db
     .prepare(
@@ -67,20 +67,22 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     id: e.id,
     paidBy: e.paid_by,
     amount: e.amount,
+    currency: e.currency,
     splits: splitsByExpense[e.id] ?? [],
   }));
 
   // Fetch settlements
   const rawSettlements = db
     .prepare(
-      "SELECT from_user, to_user, amount FROM settlements WHERE group_id = ?"
+      "SELECT from_user, to_user, amount, currency FROM settlements WHERE group_id = ?"
     )
-    .all(groupId) as Array<{ from_user: string; to_user: string; amount: number }>;
+    .all(groupId) as Array<{ from_user: string; to_user: string; amount: number; currency: string }>;
 
   const settlements = rawSettlements.map((s) => ({
     fromUser: s.from_user,
     toUser: s.to_user,
     amount: s.amount,
+    currency: s.currency,
   }));
 
   const balances = calculateBalances(members, expenses, settlements);

@@ -35,8 +35,7 @@ function createDb(): Database.Database {
       description TEXT,
       invite_code TEXT UNIQUE NOT NULL,
       created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      currency TEXT NOT NULL DEFAULT 'TRY'
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
     CREATE TABLE IF NOT EXISTS group_members (
@@ -52,6 +51,7 @@ function createDb(): Database.Database {
       group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'TRY',
       paid_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
@@ -69,6 +69,7 @@ function createDb(): Database.Database {
       from_user TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       to_user TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'TRY',
       settled_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
   `);

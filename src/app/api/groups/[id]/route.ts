@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
   const group = db
     .prepare(
-      "SELECT id, name, description, invite_code, created_by, created_at, currency FROM groups WHERE id = ?"
+      "SELECT id, name, description, invite_code, created_by, created_at FROM groups WHERE id = ?"
     )
     .get(id);
 

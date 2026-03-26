@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import getDb from "@/lib/db";
 import Link from "next/link";
 import CreateGroupForm from "./CreateGroupForm";
-import { formatAmount, type CurrencyCode } from "@/lib/currencies";
 
 interface GroupRow {
   id: string;
@@ -13,8 +12,7 @@ interface GroupRow {
   created_by: string;
   created_at: number;
   member_count: number;
-  total_expenses: number;
-  currency: CurrencyCode;
+  expense_count: number;
 }
 
 export default async function DashboardPage() {
@@ -34,9 +32,8 @@ export default async function DashboardPage() {
         g.invite_code,
         g.created_by,
         g.created_at,
-        g.currency,
         COUNT(DISTINCT gm2.id) as member_count,
-        COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.group_id = g.id), 0) as total_expenses
+        (SELECT COUNT(*) FROM expenses e WHERE e.group_id = g.id) as expense_count
       FROM groups g
       JOIN group_members gm ON g.id = gm.group_id AND gm.user_id = ?
       LEFT JOIN group_members gm2 ON g.id = gm2.group_id
@@ -112,11 +109,11 @@ export default async function DashboardPage() {
                   </svg>
                   <span>{group.member_count} member{group.member_count !== 1 ? "s" : ""}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
+                <div className="flex items-center gap-1.5 text-slate-500">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
-                  <span>{formatAmount(group.total_expenses, group.currency)}</span>
+                  <span>{group.expense_count} expense{group.expense_count !== 1 ? "s" : ""}</span>
                 </div>
               </div>
 

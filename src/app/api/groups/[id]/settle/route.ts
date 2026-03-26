@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { randomUUID } from "crypto";
+import { CURRENCIES } from "@/lib/currencies";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -25,14 +26,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { fromUser?: string; toUser?: string; amount?: number };
+  let body: { fromUser?: string; toUser?: string; amount?: number; currency?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { fromUser, toUser, amount } = body;
+  const { fromUser, toUser, amount, currency } = body;
 
   if (!fromUser || typeof fromUser !== "string") {
     return NextResponse.json({ error: "fromUser is required" }, { status: 400 });
@@ -45,6 +46,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   if (!amount || typeof amount !== "number" || amount <= 0) {
     return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
+  }
+  if (!currency || !(currency in CURRENCIES)) {
+    return NextResponse.json({ error: "A valid currency is required" }, { status: 400 });
   }
 
   // Validate both users are group members
@@ -63,8 +67,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   db.prepare(
-    "INSERT INTO settlements (id, group_id, from_user, to_user, amount) VALUES (?, ?, ?, ?, ?)"
-  ).run(randomUUID(), groupId, fromUser, toUser, amount);
+    "INSERT INTO settlements (id, group_id, from_user, to_user, amount, currency) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(randomUUID(), groupId, fromUser, toUser, amount, currency);
 
   return NextResponse.json({ success: true });
 }

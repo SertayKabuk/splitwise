@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { randomUUID } from "crypto";
 import { computeSplits, type SplitType, type SplitInput } from "@/lib/splits";
+import { CURRENCIES } from "@/lib/currencies";
 
 interface RouteParams {
   params: Promise<{ id: string; expenseId: string }>;
@@ -33,20 +34,23 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Expense not found" }, { status: 404 });
   }
 
-  let body: { title?: string; amount?: number; paidBy?: string; splitType?: string; splitWith?: { userId: string; shares: number }[] };
+  let body: { title?: string; amount?: number; currency?: string; paidBy?: string; splitType?: string; splitWith?: { userId: string; shares: number }[] };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { title, amount, paidBy, splitType = "equal", splitWith } = body;
+  const { title, amount, currency, paidBy, splitType = "equal", splitWith } = body;
 
   if (!title || typeof title !== "string" || !title.trim()) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
   if (!amount || typeof amount !== "number" || amount <= 0) {
     return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
+  }
+  if (!currency || !(currency in CURRENCIES)) {
+    return NextResponse.json({ error: "A valid currency is required" }, { status: 400 });
   }
   if (!paidBy || typeof paidBy !== "string") {
     return NextResponse.json({ error: "paidBy is required" }, { status: 400 });
@@ -81,9 +85,10 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   const computedSplits = computeSplits(amount, splitWith as SplitInput[], splitType as SplitType);
 
   db.transaction(() => {
-    db.prepare("UPDATE expenses SET title = ?, amount = ?, paid_by = ? WHERE id = ?").run(
+    db.prepare("UPDATE expenses SET title = ?, amount = ?, currency = ?, paid_by = ? WHERE id = ?").run(
       title.trim(),
       amount,
+      currency,
       paidBy,
       expenseId
     );

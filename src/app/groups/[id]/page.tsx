@@ -28,7 +28,7 @@ export default async function GroupPage({ params }: PageProps) {
 
   // Fetch group
   const group = db
-    .prepare("SELECT id, name, description, invite_code, created_by, created_at, currency FROM groups WHERE id = ?")
+    .prepare("SELECT id, name, description, invite_code, created_by, created_at FROM groups WHERE id = ?")
     .get(groupId) as {
       id: string;
       name: string;
@@ -36,7 +36,6 @@ export default async function GroupPage({ params }: PageProps) {
       invite_code: string;
       created_by: string;
       created_at: number;
-      currency: string;
     } | undefined;
 
   if (!group) {
@@ -64,7 +63,7 @@ export default async function GroupPage({ params }: PageProps) {
   // Fetch expenses with payer info and splits
   const rawExpenses = db
     .prepare(
-      `SELECT e.id, e.title, e.amount, e.paid_by, e.created_at,
+      `SELECT e.id, e.title, e.amount, e.currency, e.paid_by, e.created_at,
               u.name as payer_name, u.email as payer_email
        FROM expenses e
        JOIN users u ON e.paid_by = u.id
@@ -75,6 +74,7 @@ export default async function GroupPage({ params }: PageProps) {
       id: string;
       title: string;
       amount: number;
+      currency: string;
       paid_by: string;
       created_at: number;
       payer_name: string | null;
@@ -110,13 +110,14 @@ export default async function GroupPage({ params }: PageProps) {
 
   // Fetch settlements
   const rawSettlements = db
-    .prepare("SELECT from_user, to_user, amount, settled_at FROM settlements WHERE group_id = ?")
-    .all(groupId) as Array<{ from_user: string; to_user: string; amount: number; settled_at: number }>;
+    .prepare("SELECT from_user, to_user, amount, currency, settled_at FROM settlements WHERE group_id = ?")
+    .all(groupId) as Array<{ from_user: string; to_user: string; amount: number; currency: string; settled_at: number }>;
 
   const settlements = rawSettlements.map((s) => ({
     fromUser: s.from_user,
     toUser: s.to_user,
     amount: s.amount,
+    currency: s.currency,
     settledAt: s.settled_at,
   }));
 
@@ -127,9 +128,10 @@ export default async function GroupPage({ params }: PageProps) {
       id: e.id,
       paidBy: e.paid_by,
       amount: e.amount,
+      currency: e.currency,
       splits: (splitsByExpense[e.id] ?? []).map((s) => ({ userId: s.user_id, amount: s.amount })),
     })),
-    rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount }))
+    rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency }))
   );
 
   return (
