@@ -7,19 +7,7 @@ declare global {
   var __db: Database.Database | undefined;
 }
 
-function createDb(): Database.Database {
-  const dataDir = path.join(process.cwd(), "data");
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-
-  const dbPath = path.join(dataDir, "splitwise.db");
-  const db = new Database(dbPath);
-
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-
-  db.exec(`
+export const createTablesScript = `
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
@@ -74,7 +62,21 @@ function createDb(): Database.Database {
       currency TEXT NOT NULL DEFAULT 'TRY',
       settled_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
-  `);
+  `;
+
+function createDb(): Database.Database {
+  const dataDir = path.join(process.cwd(), "data");
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  const dbPath = path.join(dataDir, "splitwise.db");
+  const db = new Database(dbPath);
+
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON"); 
+
+  db.exec(createTablesScript);
 
   return db;
 }
