@@ -63,7 +63,7 @@ export default async function GroupPage({ params }: PageProps) {
   // Fetch expenses with payer info and splits
   const rawExpenses = db
     .prepare(
-      `SELECT e.id, e.title, e.amount, e.currency, e.paid_by, e.created_at,
+      `SELECT e.id, e.title, e.amount, e.currency, e.paid_by, e.split_type, e.created_at,
               u.name as payer_name, u.email as payer_email
        FROM expenses e
        JOIN users u ON e.paid_by = u.id
@@ -76,6 +76,7 @@ export default async function GroupPage({ params }: PageProps) {
       amount: number;
       currency: string;
       paid_by: string;
+      split_type: string;
       created_at: number;
       payer_name: string | null;
       payer_email: string;
@@ -83,7 +84,7 @@ export default async function GroupPage({ params }: PageProps) {
 
   const rawSplits = db
     .prepare(
-      `SELECT es.expense_id, es.user_id, es.amount, u.name, u.email
+      `SELECT es.expense_id, es.user_id, es.amount, es.shares, u.name, u.email
        FROM expense_splits es
        JOIN users u ON es.user_id = u.id
        JOIN expenses e ON es.expense_id = e.id
@@ -93,6 +94,7 @@ export default async function GroupPage({ params }: PageProps) {
       expense_id: string;
       user_id: string;
       amount: number;
+      shares: number;
       name: string | null;
       email: string;
     }>;

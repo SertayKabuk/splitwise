@@ -27,11 +27,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   }
 
   const existing = db
-    .prepare("SELECT id FROM expenses WHERE id = ? AND group_id = ?")
-    .get(expenseId, groupId);
+    .prepare("SELECT id, paid_by FROM expenses WHERE id = ? AND group_id = ?")
+    .get(expenseId, groupId) as { id: string; paid_by: string } | undefined;
 
   if (!existing) {
     return NextResponse.json({ error: "Expense not found" }, { status: 404 });
+  }
+
+  if (existing.paid_by !== session.user.id) {
+    return NextResponse.json({ error: "Only the expense payer can edit it" }, { status: 403 });
   }
 
   let body: { title?: string; amount?: number; currency?: string; paidBy?: string; splitType?: string; splitWith?: { userId: string; shares: number }[] };
@@ -83,21 +87,23 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   }
 
   const computedSplits = computeSplits(amount, splitWith as SplitInput[], splitType as SplitType);
+  const sharesMap = new Map(splitWith.map((s) => [s.userId, s.shares]));
 
   db.transaction(() => {
-    db.prepare("UPDATE expenses SET title = ?, amount = ?, currency = ?, paid_by = ? WHERE id = ?").run(
+    db.prepare("UPDATE expenses SET title = ?, amount = ?, currency = ?, paid_by = ?, split_type = ? WHERE id = ?").run(
       title.trim(),
       amount,
       currency,
       paidBy,
+      splitType,
       expenseId
     );
     db.prepare("DELETE FROM expense_splits WHERE expense_id = ?").run(expenseId);
     const insertSplit = db.prepare(
-      "INSERT INTO expense_splits (id, expense_id, user_id, amount) VALUES (?, ?, ?, ?)"
+      "INSERT INTO expense_splits (id, expense_id, user_id, amount, shares) VALUES (?, ?, ?, ?, ?)"
     );
     for (const { userId, amount: splitAmt } of computedSplits) {
-      insertSplit.run(randomUUID(), expenseId, userId, splitAmt);
+      insertSplit.run(randomUUID(), expenseId, userId, splitAmt, sharesMap.get(userId) ?? 1);
     }
   })();
 
@@ -123,11 +129,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   }
 
   const existing = db
-    .prepare("SELECT id FROM expenses WHERE id = ? AND group_id = ?")
-    .get(expenseId, groupId);
+    .prepare("SELECT id, paid_by FROM expenses WHERE id = ? AND group_id = ?")
+    .get(expenseId, groupId) as { id: string; paid_by: string } | undefined;
 
   if (!existing) {
     return NextResponse.json({ error: "Expense not found" }, { status: 404 });
+  }
+
+  if (existing.paid_by !== session.user.id) {
+    return NextResponse.json({ error: "Only the expense payer can delete it" }, { status: 403 });
   }
 
   db.transaction(() => {

@@ -18,6 +18,7 @@ interface ExpenseSplit {
   expense_id: string;
   user_id: string;
   amount: number;
+  shares: number;
   name: string | null;
   email: string;
 }
@@ -28,6 +29,7 @@ interface Expense {
   amount: number;
   currency: string;
   paid_by: string;
+  split_type: string;
   created_at: number;
   payer_name: string | null;
   payer_email: string;
@@ -152,6 +154,9 @@ export default function GroupPageClient({
   // Delete confirmation
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // View expense details modal
+  const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
 
   // Settle modal
   const [settleDebt, setSettleDebt] = useState<Balance | null>(null);
@@ -284,8 +289,8 @@ export default function GroupPageClient({
     setEditPaidBy(expense.paid_by);
     const splitIds = expense.splits.map((s) => s.user_id);
     setEditSplitWith(splitIds);
-    setEditSplitType("equal");
-    setEditShares(Object.fromEntries(splitIds.map((id) => [id, 1])));
+    setEditSplitType(expense.split_type as "equal" | "shares");
+    setEditShares(Object.fromEntries(expense.splits.map((s) => [s.user_id, s.shares])));
     setEditError("");
   };
 
@@ -503,23 +508,37 @@ export default function GroupPageClient({
                     })()}
                     <div className="flex gap-1.5">
                       <button
-                        onClick={() => openEdit(expense)}
+                        onClick={() => setViewingExpense(expense)}
                         className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                        title="Edit expense"
+                        title="View details"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                       </button>
-                      <button
-                        onClick={() => setDeletingExpense(expense)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete expense"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      {expense.paid_by === currentUserId && (
+                        <>
+                          <button
+                            onClick={() => openEdit(expense)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Edit expense"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setDeletingExpense(expense)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete expense"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1041,6 +1060,91 @@ export default function GroupPageClient({
               <button onClick={handleDelete} disabled={deleteLoading} className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors">
                 {deleteLoading ? "Deleting..." : "Delete"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Expense Details Modal */}
+      {viewingExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewingExpense(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <button
+              onClick={() => setViewingExpense(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h2 className="text-lg font-semibold text-slate-900 mb-4 pr-6">{viewingExpense.title}</h2>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Total</span>
+                <span className="text-xl font-bold text-emerald-600">{fmt(viewingExpense.amount, viewingExpense.currency)}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Paid by</span>
+                <span className="text-sm font-medium text-slate-800">
+                  {viewingExpense.paid_by === currentUserId ? "You" : viewingExpense.payer_name ?? viewingExpense.payer_email}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Split type</span>
+                <span className="text-sm font-medium text-slate-800 capitalize">{viewingExpense.split_type}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Date</span>
+                <span className="text-sm text-slate-600">
+                  {new Date(viewingExpense.created_at * 1000).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+
+              {viewingExpense.splits.length > 0 && (
+                <div className="pt-2 border-t border-slate-100">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Split breakdown</p>
+                  <div className="space-y-1.5">
+                    {viewingExpense.splits.map((s) => (
+                      <div key={s.user_id} className="flex items-center justify-between text-sm">
+                        <span className="text-slate-700">
+                          {s.user_id === currentUserId ? "You" : s.name ?? s.email}
+                          {viewingExpense.split_type === "shares" && (
+                            <span className="text-slate-400 ml-1">({s.shares} share{s.shares !== 1 ? "s" : ""})</span>
+                          )}
+                        </span>
+                        <span className="font-medium text-slate-800">{fmt(s.amount, viewingExpense.currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {viewingExpense.paid_by === currentUserId && (
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => { setViewingExpense(null); openEdit(viewingExpense); }}
+                    className="flex-1 px-3 py-2 border border-slate-200 text-slate-600 font-medium text-sm rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => { setViewingExpense(null); setDeletingExpense(viewingExpense); }}
+                    className="flex-1 px-3 py-2 border border-red-200 text-red-600 font-medium text-sm rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

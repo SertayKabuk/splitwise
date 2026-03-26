@@ -53,6 +53,7 @@ function createDb(): Database.Database {
       amount REAL NOT NULL,
       currency TEXT NOT NULL DEFAULT 'TRY',
       paid_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      split_type TEXT NOT NULL DEFAULT 'equal',
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -60,7 +61,8 @@ function createDb(): Database.Database {
       id TEXT PRIMARY KEY,
       expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      amount REAL NOT NULL
+      amount REAL NOT NULL,
+      shares INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS settlements (

@@ -36,6 +36,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         e.amount,
         e.currency,
         e.paid_by,
+        e.split_type,
         e.created_at,
         u.name as payer_name,
         u.email as payer_email
@@ -51,6 +52,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       amount: number;
       currency: string;
       paid_by: string;
+      split_type: string;
       created_at: number;
       payer_name: string | null;
       payer_email: string;
@@ -63,6 +65,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         es.expense_id,
         es.user_id,
         es.amount,
+        es.shares,
         u.name,
         u.email
       FROM expense_splits es
@@ -75,6 +78,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       expense_id: string;
       user_id: string;
       amount: number;
+      shares: number;
       name: string | null;
       email: string;
     }>;
@@ -164,18 +168,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const computedSplits = computeSplits(amount, splitWith as SplitInput[], splitType as SplitType);
   const expenseId = randomUUID();
+  const sharesMap = new Map(splitWith.map((s) => [s.userId, s.shares]));
 
   const insertExpense = db.prepare(
-    "INSERT INTO expenses (id, group_id, title, amount, currency, paid_by) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO expenses (id, group_id, title, amount, currency, paid_by, split_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
   );
   const insertSplit = db.prepare(
-    "INSERT INTO expense_splits (id, expense_id, user_id, amount) VALUES (?, ?, ?, ?)"
+    "INSERT INTO expense_splits (id, expense_id, user_id, amount, shares) VALUES (?, ?, ?, ?, ?)"
   );
 
   db.transaction(() => {
-    insertExpense.run(expenseId, groupId, title.trim(), amount, currency, paidBy);
+    insertExpense.run(expenseId, groupId, title.trim(), amount, currency, paidBy, splitType);
     for (const { userId, amount: splitAmt } of computedSplits) {
-      insertSplit.run(randomUUID(), expenseId, userId, splitAmt);
+      insertSplit.run(randomUUID(), expenseId, userId, splitAmt, sharesMap.get(userId) ?? 1);
     }
   })();
 
