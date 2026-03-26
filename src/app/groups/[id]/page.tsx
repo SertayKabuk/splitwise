@@ -142,7 +142,6 @@ export default async function GroupPage({ params }: PageProps) {
       members={members}
       expenses={expenses}
       balances={balances}
-      settlements={settlements}
       currentUserId={session.user.id}
     />
   );
