@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { getInitials } from "@/lib/initials";
 
 interface Member {
   id: string;
@@ -24,15 +25,6 @@ interface Props {
   members: Member[];
   inviteCode: string;
   isAuthenticated: boolean;
-}
-
-function getInitials(name: string | null, email: string): string {
-  if (name) {
-    const parts = name.trim().split(" ");
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return parts[0][0].toUpperCase();
-  }
-  return email[0].toUpperCase();
 }
 
 const AVATAR_COLORS = [

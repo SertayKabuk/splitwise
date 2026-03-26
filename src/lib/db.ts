@@ -25,6 +25,7 @@ function createDb(): Database.Database {
       email TEXT UNIQUE NOT NULL,
       name TEXT,
       image TEXT,
+      iban TEXT,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -34,7 +35,8 @@ function createDb(): Database.Database {
       description TEXT,
       invite_code TEXT UNIQUE NOT NULL,
       created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      currency TEXT NOT NULL DEFAULT 'TRY'
     );
 
     CREATE TABLE IF NOT EXISTS group_members (

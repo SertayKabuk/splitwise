@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CURRENCIES, type CurrencyCode } from "@/lib/currencies";
 
 export default function CreateGroupForm() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [currency, setCurrency] = useState<CurrencyCode>("TRY");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,7 +27,7 @@ export default function CreateGroupForm() {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        body: JSON.stringify({ name: name.trim(), description: description.trim(), currency }),
       });
 
       if (!res.ok) {
@@ -36,6 +38,7 @@ export default function CreateGroupForm() {
       setIsOpen(false);
       setName("");
       setDescription("");
+      setCurrency("TRY");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -100,6 +103,23 @@ export default function CreateGroupForm() {
                   rows={3}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Currency
+                </label>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  {(Object.entries(CURRENCIES) as [CurrencyCode, { symbol: string; name: string }][]).map(([code, { symbol, name }]) => (
+                    <option key={code} value={code}>
+                      {symbol} {name} ({code})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {error && (

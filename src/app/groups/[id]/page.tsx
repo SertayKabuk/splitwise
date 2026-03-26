@@ -28,7 +28,7 @@ export default async function GroupPage({ params }: PageProps) {
 
   // Fetch group
   const group = db
-    .prepare("SELECT id, name, description, invite_code, created_by, created_at FROM groups WHERE id = ?")
+    .prepare("SELECT id, name, description, invite_code, created_by, created_at, currency FROM groups WHERE id = ?")
     .get(groupId) as {
       id: string;
       name: string;
@@ -36,6 +36,7 @@ export default async function GroupPage({ params }: PageProps) {
       invite_code: string;
       created_by: string;
       created_at: number;
+      currency: string;
     } | undefined;
 
   if (!group) {
@@ -45,7 +46,7 @@ export default async function GroupPage({ params }: PageProps) {
   // Fetch members
   const members = db
     .prepare(
-      `SELECT u.id, u.name, u.email, u.image, gm.joined_at
+      `SELECT u.id, u.name, u.email, u.image, u.iban, gm.joined_at
        FROM group_members gm
        JOIN users u ON gm.user_id = u.id
        WHERE gm.group_id = ?
@@ -56,6 +57,7 @@ export default async function GroupPage({ params }: PageProps) {
       name: string | null;
       email: string;
       image: string | null;
+      iban: string | null;
       joined_at: number;
     }>;
 

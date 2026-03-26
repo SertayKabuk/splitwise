@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import getDb from "@/lib/db";
 import { randomUUID } from "crypto";
+import { computeSplits, type SplitType, type SplitInput } from "@/lib/splits";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -109,14 +110,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { title?: string; amount?: number; paidBy?: string; splitWith?: string[] };
+  let body: { title?: string; amount?: number; paidBy?: string; splitType?: string; splitWith?: { userId: string; shares: number }[] };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { title, amount, paidBy, splitWith } = body;
+  const { title, amount, paidBy, splitType = "equal", splitWith } = body;
 
   if (!title || typeof title !== "string" || !title.trim()) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -127,41 +128,35 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!paidBy || typeof paidBy !== "string") {
     return NextResponse.json({ error: "paidBy is required" }, { status: 400 });
   }
-
-  // Validate payer is a group member
-  const payerMembership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, paidBy);
-
-  if (!payerMembership) {
-    return NextResponse.json({ error: "Payer is not a group member" }, { status: 400 });
+  if (splitType !== "equal" && splitType !== "shares") {
+    return NextResponse.json({ error: "splitType must be 'equal' or 'shares'" }, { status: 400 });
   }
-
-  // Determine who to split with
-  let splitUserIds: string[] = splitWith ?? [];
-
-  if (!splitUserIds.length) {
-    // Default to all group members
-    const allMembers = db
-      .prepare("SELECT user_id FROM group_members WHERE group_id = ?")
-      .all(groupId) as Array<{ user_id: string }>;
-    splitUserIds = allMembers.map((m) => m.user_id);
+  if (!splitWith || !splitWith.length) {
+    return NextResponse.json({ error: "splitWith is required" }, { status: 400 });
   }
-
-  // Validate all split users are group members
-  for (const userId of splitUserIds) {
-    const m = db
-      .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-      .get(groupId, userId);
-    if (!m) {
-      return NextResponse.json(
-        { error: `User ${userId} is not a group member` },
-        { status: 400 }
-      );
+  for (const { shares } of splitWith) {
+    if (typeof shares !== "number" || shares < 1) {
+      return NextResponse.json({ error: "Each share value must be a positive integer" }, { status: 400 });
     }
   }
 
-  const splitAmount = Math.round((amount / splitUserIds.length) * 100) / 100;
+  // Validate payer and all split users are group members in two queries
+  const allUserIds = Array.from(new Set([paidBy, ...splitWith.map((s) => s.userId)]));
+  const placeholders = allUserIds.map(() => "?").join(",");
+  const validMembers = db
+    .prepare(`SELECT user_id FROM group_members WHERE group_id = ? AND user_id IN (${placeholders})`)
+    .all(groupId, ...allUserIds) as Array<{ user_id: string }>;
+  const validIds = new Set(validMembers.map((m) => m.user_id));
+
+  if (!validIds.has(paidBy)) {
+    return NextResponse.json({ error: "Payer is not a group member" }, { status: 400 });
+  }
+  const invalidSplit = splitWith.find((s) => !validIds.has(s.userId));
+  if (invalidSplit) {
+    return NextResponse.json({ error: `User ${invalidSplit.userId} is not a group member` }, { status: 400 });
+  }
+
+  const computedSplits = computeSplits(amount, splitWith as SplitInput[], splitType as SplitType);
   const expenseId = randomUUID();
 
   const insertExpense = db.prepare(
@@ -173,8 +168,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   db.transaction(() => {
     insertExpense.run(expenseId, groupId, title.trim(), amount, paidBy);
-    for (const userId of splitUserIds) {
-      insertSplit.run(randomUUID(), expenseId, userId, splitAmount);
+    for (const { userId, amount: splitAmt } of computedSplits) {
+      insertSplit.run(randomUUID(), expenseId, userId, splitAmt);
     }
   })();
 

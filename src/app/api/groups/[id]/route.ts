@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
   const group = db
     .prepare(
-      "SELECT id, name, description, invite_code, created_by, created_at FROM groups WHERE id = ?"
+      "SELECT id, name, description, invite_code, created_by, created_at, currency FROM groups WHERE id = ?"
     )
     .get(id);
 
@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   const members = db
     .prepare(
       `
-      SELECT u.id, u.name, u.email, u.image, gm.joined_at
+      SELECT u.id, u.name, u.email, u.image, u.iban, gm.joined_at
       FROM group_members gm
       JOIN users u ON gm.user_id = u.id
       WHERE gm.group_id = ?

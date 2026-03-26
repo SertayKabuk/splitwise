@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { CURRENCIES, formatAmount, type CurrencyCode } from "@/lib/currencies";
+import { getInitials } from "@/lib/initials";
 
 interface Member {
   id: string;
   name: string | null;
   email: string;
   image: string | null;
+  iban: string | null;
   joined_at: number;
 }
 
@@ -53,6 +56,7 @@ interface Group {
   invite_code: string;
   created_by: string;
   created_at: number;
+  currency: string;
 }
 
 interface Props {
@@ -66,14 +70,6 @@ interface Props {
 
 type Tab = "expenses" | "balances" | "members";
 
-function getInitials(name: string | null, email: string): string {
-  if (name) {
-    const parts = name.trim().split(" ");
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return parts[0][0].toUpperCase();
-  }
-  return email[0].toUpperCase();
-}
 
 const AVATAR_COLORS = [
   "bg-indigo-500",
@@ -121,6 +117,7 @@ export default function GroupPageClient({
   currentUserId,
 }: Props) {
   const router = useRouter();
+  const fmt = (amount: number) => formatAmount(amount, group.currency as CurrencyCode);
   const [activeTab, setActiveTab] = useState<Tab>("expenses");
   const [copied, setCopied] = useState(false);
   const [balances, setBalances] = useState<Balance[]>(initialBalances);
@@ -132,6 +129,10 @@ export default function GroupPageClient({
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expensePaidBy, setExpensePaidBy] = useState(currentUserId);
   const [expenseSplitWith, setExpenseSplitWith] = useState<string[]>(members.map((m) => m.id));
+  const [expenseSplitType, setExpenseSplitType] = useState<"equal" | "shares">("equal");
+  const [expenseShares, setExpenseShares] = useState<Record<string, number>>(
+    () => Object.fromEntries(members.map((m) => [m.id, 1]))
+  );
   const [addExpenseLoading, setAddExpenseLoading] = useState(false);
   const [addExpenseError, setAddExpenseError] = useState("");
 
@@ -141,6 +142,8 @@ export default function GroupPageClient({
   const [editAmount, setEditAmount] = useState("");
   const [editPaidBy, setEditPaidBy] = useState(currentUserId);
   const [editSplitWith, setEditSplitWith] = useState<string[]>([]);
+  const [editSplitType, setEditSplitType] = useState<"equal" | "shares">("equal");
+  const [editShares, setEditShares] = useState<Record<string, number>>({});
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -152,6 +155,10 @@ export default function GroupPageClient({
   const [settleDebt, setSettleDebt] = useState<Balance | null>(null);
   const [settleLoading, setSettleLoading] = useState(false);
 
+  // Member profile modal
+  const [viewingMember, setViewingMember] = useState<Member | null>(null);
+  const [copiedIban, setCopiedIban] = useState(false);
+
   const handleCopyInvite = () => {
     const url = `${window.location.origin}/join/${group.invite_code}`;
     navigator.clipboard.writeText(url).then(() => {
@@ -161,9 +168,12 @@ export default function GroupPageClient({
   };
 
   const toggleSplitMember = (userId: string) => {
-    setExpenseSplitWith((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
-    );
+    if (expenseSplitWith.includes(userId)) {
+      setExpenseSplitWith((prev) => prev.filter((id) => id !== userId));
+    } else {
+      setExpenseSplitWith((prev) => [...prev, userId]);
+      setExpenseShares((prev) => ({ ...prev, [userId]: prev[userId] ?? 1 }));
+    }
   };
 
   const handleAddExpense = async (e: React.FormEvent) => {
@@ -193,7 +203,11 @@ export default function GroupPageClient({
           title: expenseTitle.trim(),
           amount,
           paidBy: expensePaidBy,
-          splitWith: expenseSplitWith,
+          splitType: expenseSplitType,
+          splitWith: expenseSplitWith.map((userId) => ({
+            userId,
+            shares: expenseShares[userId] ?? 1,
+          })),
         }),
       });
 
@@ -216,6 +230,8 @@ export default function GroupPageClient({
       setExpenseAmount("");
       setExpensePaidBy(currentUserId);
       setExpenseSplitWith(members.map((m) => m.id));
+      setExpenseSplitType("equal");
+      setExpenseShares(Object.fromEntries(members.map((m) => [m.id, 1])));
     } catch (err) {
       setAddExpenseError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -260,7 +276,10 @@ export default function GroupPageClient({
     setEditTitle(expense.title);
     setEditAmount(String(expense.amount));
     setEditPaidBy(expense.paid_by);
-    setEditSplitWith(expense.splits.map((s) => s.user_id));
+    const splitIds = expense.splits.map((s) => s.user_id);
+    setEditSplitWith(splitIds);
+    setEditSplitType("equal");
+    setEditShares(Object.fromEntries(splitIds.map((id) => [id, 1])));
     setEditError("");
   };
 
@@ -278,7 +297,16 @@ export default function GroupPageClient({
       const res = await fetch(`/api/groups/${group.id}/expenses/${editingExpense.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: editTitle.trim(), amount, paidBy: editPaidBy, splitWith: editSplitWith }),
+        body: JSON.stringify({
+            title: editTitle.trim(),
+            amount,
+            paidBy: editPaidBy,
+            splitType: editSplitType,
+            splitWith: editSplitWith.map((userId) => ({
+              userId,
+              shares: editShares[userId] ?? 1,
+            })),
+          }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -335,12 +363,12 @@ export default function GroupPageClient({
             <p className="text-slate-500 mt-1">{group.description}</p>
           )}
           <p className="text-slate-400 text-sm mt-1">
-            {members.length} member{members.length !== 1 ? "s" : ""}
+            {members.length} member{members.length !== 1 ? "s" : ""} · {CURRENCIES[group.currency as CurrencyCode]?.name ?? group.currency}
           </p>
         </div>
         <button
           onClick={handleCopyInvite}
-          className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 font-medium rounded-lg transition-all text-sm"
+          className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 font-medium rounded-lg transition-all text-sm"
         >
           {copied ? (
             <>
@@ -361,8 +389,8 @@ export default function GroupPageClient({
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200 mb-6">
-        <nav className="flex gap-1">
+      <div className="border-b border-slate-200 mb-6 overflow-x-auto">
+        <nav className="flex gap-1 min-w-max">
           {(["expenses", "balances", "members"] as Tab[]).map((tab) => (
             <button
               key={tab}
@@ -395,7 +423,7 @@ export default function GroupPageClient({
           <div className="flex justify-end mb-4">
             <button
               onClick={() => setShowAddExpense(true)}
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-lg transition-colors text-sm"
+              className="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-lg transition-colors text-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -453,11 +481,11 @@ export default function GroupPageClient({
                   </div>
                   <div className="text-right flex-shrink-0 flex flex-col items-end gap-2">
                     <p className="text-lg font-bold text-emerald-600">
-                      ${expense.amount.toFixed(2)}
+                      {fmt(expense.amount)}
                     </p>
                     {expense.splits.length > 0 && (
                       <p className="text-xs text-slate-400">
-                        ${(expense.amount / expense.splits.length).toFixed(2)} each
+                        {fmt(expense.amount / expense.splits.length)} each
                       </p>
                     )}
                     <div className="flex gap-1.5">
@@ -502,32 +530,32 @@ export default function GroupPageClient({
               {balances.map((balance, i) => (
                 <div
                   key={i}
-                  className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-4"
+                  className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
                       {memberMap.get(balance.fromUserId) && (
                         <Avatar member={memberMap.get(balance.fromUserId)!} size="sm" />
                       )}
-                      <span className="font-medium text-slate-900 text-sm">
+                      <span className="font-medium text-slate-900 text-sm truncate">
                         {balance.fromUserId === currentUserId ? "You" : balance.fromUserName}
                       </span>
                     </div>
                     <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                     </svg>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       {memberMap.get(balance.toUserId) && (
                         <Avatar member={memberMap.get(balance.toUserId)!} size="sm" />
                       )}
-                      <span className="font-medium text-slate-900 text-sm">
+                      <span className="font-medium text-slate-900 text-sm truncate">
                         {balance.toUserId === currentUserId ? "You" : balance.toUserName}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
                     <span className="font-bold text-red-500 text-lg">
-                      ${balance.amount.toFixed(2)}
+                      {fmt(balance.amount)}
                     </span>
                     <button
                       onClick={() => setSettleDebt(balance)}
@@ -547,13 +575,14 @@ export default function GroupPageClient({
       {activeTab === "members" && (
         <div className="space-y-3">
           {members.map((member) => (
-            <div
+            <button
               key={member.id}
-              className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4"
+              onClick={() => setViewingMember(member)}
+              className="w-full bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors text-left"
             >
               <Avatar member={member} size="lg" />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-slate-900">
                     {member.name ?? member.email}
                   </p>
@@ -569,16 +598,16 @@ export default function GroupPageClient({
                   )}
                 </div>
                 <p className="text-sm text-slate-500">{member.email}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Joined{" "}
-                  {new Date(member.joined_at * 1000).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
+                {member.iban ? (
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">{member.iban}</p>
+                ) : (
+                  <p className="text-xs text-slate-300 mt-0.5">No IBAN set</p>
+                )}
               </div>
-            </div>
+              <svg className="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           ))}
         </div>
       )}
@@ -619,7 +648,7 @@ export default function GroupPageClient({
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Amount ($) <span className="text-red-500">*</span>
+                  Amount ({CURRENCIES[group.currency as CurrencyCode]?.symbol ?? group.currency}) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -650,38 +679,110 @@ export default function GroupPageClient({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Split with <span className="text-red-500">*</span>
-                </label>
-                <div className="space-y-2">
-                  {members.map((m) => (
-                    <label
-                      key={m.id}
-                      className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 cursor-pointer"
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Split with <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setExpenseSplitType("equal")}
+                      className={`px-3 py-1.5 transition-colors ${
+                        expenseSplitType === "equal"
+                          ? "bg-indigo-600 text-white"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={expenseSplitWith.includes(m.id)}
-                        onChange={() => toggleSplitMember(m.id)}
-                        className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-                      />
-                      <Avatar member={m} size="sm" />
-                      <span className="text-sm text-slate-700">
-                        {m.id === currentUserId ? "You" : m.name ?? m.email}
-                      </span>
-                    </label>
-                  ))}
+                      Equal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpenseSplitType("shares")}
+                      className={`px-3 py-1.5 border-l border-slate-200 transition-colors ${
+                        expenseSplitType === "shares"
+                          ? "bg-indigo-600 text-white"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      Shares
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {members.map((m) => {
+                    const isSelected = expenseSplitWith.includes(m.id);
+                    return (
+                      <div
+                        key={m.id}
+                        className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSplitMember(m.id)}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                        />
+                        <Avatar member={m} size="sm" />
+                        <span className="text-sm text-slate-700 flex-1">
+                          {m.id === currentUserId ? "You" : m.name ?? m.email}
+                        </span>
+                        {expenseSplitType === "shares" && isSelected && (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={expenseShares[m.id] ?? 1}
+                              onChange={(e) =>
+                                setExpenseShares((prev) => ({
+                                  ...prev,
+                                  [m.id]: Math.max(1, parseInt(e.target.value) || 1),
+                                }))
+                              }
+                              className="w-14 text-center border border-slate-200 rounded-lg px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <span className="text-xs text-slate-400">shares</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {expenseSplitWith.length > 0 && expenseAmount && parseFloat(expenseAmount) > 0 && (
-                <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
-                  Each person pays:{" "}
-                  <span className="font-semibold text-slate-700">
-                    ${(parseFloat(expenseAmount) / expenseSplitWith.length).toFixed(2)}
-                  </span>
-                </p>
-              )}
+              {expenseSplitWith.length > 0 && expenseAmount && parseFloat(expenseAmount) > 0 && (() => {
+                const totalAmount = parseFloat(expenseAmount);
+                if (expenseSplitType === "equal") {
+                  return (
+                    <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
+                      Each person pays:{" "}
+                      <span className="font-semibold text-slate-700">
+                        {fmt(totalAmount / expenseSplitWith.length)}
+                      </span>
+                    </p>
+                  );
+                }
+                const totalShares = expenseSplitWith.reduce((sum, id) => sum + (expenseShares[id] ?? 1), 0);
+                return (
+                  <div className="bg-slate-50 rounded-lg px-3 py-2.5 space-y-1.5">
+                    {expenseSplitWith.map((id) => {
+                      const m = memberMap.get(id);
+                      const myShares = expenseShares[id] ?? 1;
+                      return (
+                        <div key={id} className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">
+                            {id === currentUserId ? "You" : m?.name ?? m?.email}
+                            <span className="text-slate-400 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
+                          </span>
+                          <span className="font-semibold text-slate-700">
+                            {fmt(totalAmount * myShares / totalShares)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {addExpenseError && (
                 <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">
@@ -734,7 +835,7 @@ export default function GroupPageClient({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount ($) <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount ({CURRENCIES[group.currency as CurrencyCode]?.symbol ?? group.currency}) <span className="text-red-500">*</span></label>
                 <input
                   type="number"
                   value={editAmount}
@@ -757,34 +858,113 @@ export default function GroupPageClient({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Split with <span className="text-red-500">*</span></label>
-                <div className="space-y-2">
-                  {members.map((m) => (
-                    <label key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editSplitWith.includes(m.id)}
-                        onChange={() =>
-                          setEditSplitWith((prev) =>
-                            prev.includes(m.id) ? prev.filter((id) => id !== m.id) : [...prev, m.id]
-                          )
-                        }
-                        className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-                      />
-                      <Avatar member={m} size="sm" />
-                      <span className="text-sm text-slate-700">{m.id === currentUserId ? "You" : m.name ?? m.email}</span>
-                    </label>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Split with <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setEditSplitType("equal")}
+                      className={`px-3 py-1.5 transition-colors ${
+                        editSplitType === "equal"
+                          ? "bg-indigo-600 text-white"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      Equal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditSplitType("shares")}
+                      className={`px-3 py-1.5 border-l border-slate-200 transition-colors ${
+                        editSplitType === "shares"
+                          ? "bg-indigo-600 text-white"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      Shares
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {members.map((m) => {
+                    const isSelected = editSplitWith.includes(m.id);
+                    return (
+                      <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            if (isSelected) {
+                              setEditSplitWith((prev) => prev.filter((id) => id !== m.id));
+                            } else {
+                              setEditSplitWith((prev) => [...prev, m.id]);
+                              setEditShares((prev) => ({ ...prev, [m.id]: prev[m.id] ?? 1 }));
+                            }
+                          }}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                        />
+                        <Avatar member={m} size="sm" />
+                        <span className="text-sm text-slate-700 flex-1">
+                          {m.id === currentUserId ? "You" : m.name ?? m.email}
+                        </span>
+                        {editSplitType === "shares" && isSelected && (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={editShares[m.id] ?? 1}
+                              onChange={(e) =>
+                                setEditShares((prev) => ({
+                                  ...prev,
+                                  [m.id]: Math.max(1, parseInt(e.target.value) || 1),
+                                }))
+                              }
+                              className="w-14 text-center border border-slate-200 rounded-lg px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <span className="text-xs text-slate-400">shares</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              {editSplitWith.length > 0 && editAmount && parseFloat(editAmount) > 0 && (
-                <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
-                  Each person pays:{" "}
-                  <span className="font-semibold text-slate-700">
-                    ${(parseFloat(editAmount) / editSplitWith.length).toFixed(2)}
-                  </span>
-                </p>
-              )}
+              {editSplitWith.length > 0 && editAmount && parseFloat(editAmount) > 0 && (() => {
+                const totalAmount = parseFloat(editAmount);
+                if (editSplitType === "equal") {
+                  return (
+                    <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
+                      Each person pays:{" "}
+                      <span className="font-semibold text-slate-700">
+                        {fmt(totalAmount / editSplitWith.length)}
+                      </span>
+                    </p>
+                  );
+                }
+                const totalShares = editSplitWith.reduce((sum, id) => sum + (editShares[id] ?? 1), 0);
+                return (
+                  <div className="bg-slate-50 rounded-lg px-3 py-2.5 space-y-1.5">
+                    {editSplitWith.map((id) => {
+                      const m = memberMap.get(id);
+                      const myShares = editShares[id] ?? 1;
+                      return (
+                        <div key={id} className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">
+                            {id === currentUserId ? "You" : m?.name ?? m?.email}
+                            <span className="text-slate-400 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
+                          </span>
+                          <span className="font-semibold text-slate-700">
+                            {fmt(totalAmount * myShares / totalShares)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               {editError && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEditingExpense(null)} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors">
@@ -822,6 +1002,91 @@ export default function GroupPageClient({
         </div>
       )}
 
+      {/* Member Profile Modal */}
+      {viewingMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewingMember(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <button
+              onClick={() => setViewingMember(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="flex flex-col items-center text-center mb-6">
+              <Avatar member={viewingMember} size="lg" />
+              <div className="mt-3">
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    {viewingMember.name ?? viewingMember.email}
+                  </h2>
+                  {viewingMember.id === currentUserId && (
+                    <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
+                      You
+                    </span>
+                  )}
+                  {viewingMember.id === group.created_by && (
+                    <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-medium">
+                      Creator
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-500 mt-0.5">{viewingMember.email}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Joined{" "}
+                  {new Date(viewingMember.joined_at * 1000).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {viewingMember.iban ? (
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">IBAN</p>
+                  <p className="font-mono text-sm text-slate-800 break-all">{viewingMember.iban}</p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(viewingMember.iban!);
+                      setCopiedIban(true);
+                      setTimeout(() => setCopiedIban(false), 2000);
+                    }}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    {copiedIban ? "Copied!" : "Copy IBAN"}
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-4 text-center">
+                  <p className="text-sm text-slate-400">No IBAN set</p>
+                </div>
+              )}
+
+              {viewingMember.id === currentUserId && (
+                <a
+                  href="/profile"
+                  className="flex items-center justify-center gap-2 w-full px-4 py-2.5 border border-slate-200 text-slate-600 font-medium text-sm rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Profile
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settle Confirmation Modal */}
       {settleDebt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -831,14 +1096,14 @@ export default function GroupPageClient({
           />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4">Confirm Settlement</h2>
-            <p className="text-slate-600 mb-6">
+            <p className="text-slate-600 mb-4">
               Are you sure you want to record that{" "}
               <span className="font-semibold">
                 {settleDebt.fromUserId === currentUserId ? "You" : settleDebt.fromUserName}
               </span>{" "}
               paid{" "}
               <span className="font-semibold text-emerald-600">
-                ${settleDebt.amount.toFixed(2)}
+                {fmt(settleDebt.amount)}
               </span>{" "}
               to{" "}
               <span className="font-semibold">
@@ -846,6 +1111,17 @@ export default function GroupPageClient({
               </span>
               ?
             </p>
+            {memberMap.get(settleDebt.toUserId)?.iban && (
+              <div className="bg-slate-50 rounded-lg px-3 py-2.5 mb-6">
+                <p className="text-xs text-slate-500 mb-0.5">
+                  {settleDebt.toUserId === currentUserId ? "Your" : `${settleDebt.toUserName}'s`} IBAN
+                </p>
+                <p className="font-mono text-sm text-slate-800 break-all">
+                  {memberMap.get(settleDebt.toUserId)?.iban}
+                </p>
+              </div>
+            )}
+            {!memberMap.get(settleDebt.toUserId)?.iban && <div className="mb-6" />}
             <div className="flex gap-3">
               <button
                 onClick={() => setSettleDebt(null)}

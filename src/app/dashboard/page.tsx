@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import getDb from "@/lib/db";
 import Link from "next/link";
 import CreateGroupForm from "./CreateGroupForm";
+import { formatAmount, type CurrencyCode } from "@/lib/currencies";
 
 interface GroupRow {
   id: string;
@@ -13,6 +14,7 @@ interface GroupRow {
   created_at: number;
   member_count: number;
   total_expenses: number;
+  currency: CurrencyCode;
 }
 
 export default async function DashboardPage() {
@@ -32,12 +34,12 @@ export default async function DashboardPage() {
         g.invite_code,
         g.created_by,
         g.created_at,
+        g.currency,
         COUNT(DISTINCT gm2.id) as member_count,
-        COALESCE(SUM(e.amount), 0) as total_expenses
+        COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.group_id = g.id), 0) as total_expenses
       FROM groups g
       JOIN group_members gm ON g.id = gm.group_id AND gm.user_id = ?
       LEFT JOIN group_members gm2 ON g.id = gm2.group_id
-      LEFT JOIN expenses e ON g.id = e.group_id
       GROUP BY g.id
       ORDER BY g.created_at DESC
     `
@@ -114,7 +116,7 @@ export default async function DashboardPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span>${group.total_expenses.toFixed(2)}</span>
+                  <span>{formatAmount(group.total_expenses, group.currency)}</span>
                 </div>
               </div>
 

@@ -40,6 +40,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!toUser || typeof toUser !== "string") {
     return NextResponse.json({ error: "toUser is required" }, { status: 400 });
   }
+  if (fromUser === toUser) {
+    return NextResponse.json({ error: "fromUser and toUser must be different" }, { status: 400 });
+  }
   if (!amount || typeof amount !== "number" || amount <= 0) {
     return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
   }
