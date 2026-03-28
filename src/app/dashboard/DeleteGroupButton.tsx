@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 
 export default function DeleteGroupButton({ groupId }: { groupId: string }) {
   const router = useRouter();
@@ -29,33 +31,37 @@ export default function DeleteGroupButton({ groupId }: { groupId: string }) {
   if (confirming) {
     return (
       <div className="flex items-center gap-1.5" onClick={(e) => e.preventDefault()}>
-        <span className="text-xs text-slate-500">Delete group?</span>
-        <button
+        <span className="text-xs text-muted-foreground">Delete group?</span>
+        <Button
+          size="sm"
+          variant="destructive"
           onClick={handleDelete}
           disabled={loading}
-          className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md font-medium transition-colors"
+          className="h-6 text-xs px-2"
         >
           {loading ? "..." : "Yes"}
-        </button>
-        <button
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
           onClick={() => setConfirming(false)}
-          className="text-xs px-2 py-1 border border-slate-200 text-slate-600 rounded-md hover:bg-slate-50 transition-colors"
+          className="h-6 text-xs px-2"
         >
           No
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="icon"
       onClick={(e) => { e.preventDefault(); setConfirming(true); }}
-      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
       title="Delete group"
     >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-      </svg>
-    </button>
+      <Trash2 className="w-4 h-4" />
+    </Button>
   );
 }

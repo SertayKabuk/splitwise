@@ -4,6 +4,7 @@ import "./globals.css";
 import { auth } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import SessionProvider from "@/components/SessionProvider";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,12 +21,19 @@ export default async function RootLayout({
   const session = await auth();
 
   return (
-    <html lang="en">
-      <body className={`${inter.className} bg-slate-50 min-h-screen`}>
-        <SessionProvider session={session}>
-          {session && <Navbar session={session} />}
-          {children}
-        </SessionProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <SessionProvider session={session}>
+            {session && <Navbar session={session} />}
+            {children}
+          </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -3,6 +3,14 @@
 import { useState } from "react";
 import type { Member, Group } from "./types";
 import { Avatar } from "./Avatar";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
+import { ChevronRight, Copy, Check, Pencil } from "lucide-react";
+import Link from "next/link";
 
 interface Props {
   members: Member[];
@@ -20,107 +28,95 @@ export function MembersTab({ members, group, currentUserId }: Props) {
         <button
           key={member.id}
           onClick={() => setViewingMember(member)}
-          className="w-full bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors text-left"
+          className="w-full bg-card rounded-xl border border-border p-4 flex items-center gap-4 hover:border-primary/30 hover:bg-accent/30 transition-colors text-left"
         >
           <Avatar member={member} size="lg" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-slate-900">{member.name ?? member.email}</p>
+              <p className="font-semibold text-foreground">{member.name ?? member.email}</p>
               {member.id === currentUserId && (
-                <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">You</span>
+                <Badge variant="secondary" className="text-xs">You</Badge>
               )}
               {member.id === group.created_by && (
-                <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-medium">Creator</span>
+                <Badge className="text-xs bg-amber-500 hover:bg-amber-600 text-white">Creator</Badge>
               )}
             </div>
-            <p className="text-sm text-slate-500">{member.email}</p>
+            <p className="text-sm text-muted-foreground">{member.email}</p>
             {member.iban ? (
-              <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">{member.iban}</p>
+              <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">{member.iban}</p>
             ) : (
-              <p className="text-xs text-slate-300 mt-0.5">No IBAN set</p>
+              <p className="text-xs text-muted-foreground/50 mt-0.5">No IBAN set</p>
             )}
           </div>
-          <svg className="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          <ChevronRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
         </button>
       ))}
 
       {/* Member Profile Modal */}
-      {viewingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewingMember(null)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <button
-              onClick={() => setViewingMember(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <div className="flex flex-col items-center text-center mb-6">
-              <Avatar member={viewingMember} size="lg" />
-              <div className="mt-3">
-                <div className="flex items-center justify-center gap-2 flex-wrap">
-                  <h2 className="text-lg font-semibold text-slate-900">{viewingMember.name ?? viewingMember.email}</h2>
-                  {viewingMember.id === currentUserId && (
-                    <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">You</span>
-                  )}
-                  {viewingMember.id === group.created_by && (
-                    <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-medium">Creator</span>
-                  )}
+      <Dialog open={!!viewingMember} onOpenChange={(open) => !open && setViewingMember(null)}>
+        <DialogContent className="max-w-sm">
+          {viewingMember && (
+            <>
+              <div className="flex flex-col items-center text-center mb-4">
+                <Avatar member={viewingMember} size="lg" />
+                <div className="mt-3">
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <h2 className="text-lg font-semibold text-foreground">{viewingMember.name ?? viewingMember.email}</h2>
+                    {viewingMember.id === currentUserId && (
+                      <Badge variant="secondary" className="text-xs">You</Badge>
+                    )}
+                    {viewingMember.id === group.created_by && (
+                      <Badge className="text-xs bg-amber-500 hover:bg-amber-600 text-white">Creator</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">{viewingMember.email}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Joined{" "}
+                    {new Date(viewingMember.joined_at * 1000).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </p>
                 </div>
-                <p className="text-sm text-slate-500 mt-0.5">{viewingMember.email}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Joined{" "}
-                  {new Date(viewingMember.joined_at * 1000).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
               </div>
-            </div>
-            <div className="space-y-3">
-              {viewingMember.iban ? (
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">IBAN</p>
-                  <p className="font-mono text-sm text-slate-800 break-all">{viewingMember.iban}</p>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(viewingMember.iban!);
-                      setCopiedIban(true);
-                      setTimeout(() => setCopiedIban(false), 2000);
-                    }}
-                    className="mt-2 inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    {copiedIban ? "Copied!" : "Copy IBAN"}
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-slate-50 rounded-xl p-4 text-center">
-                  <p className="text-sm text-slate-400">No IBAN set</p>
-                </div>
-              )}
-              {viewingMember.id === currentUserId && (
-                <a
-                  href="/profile"
-                  className="flex items-center justify-center gap-2 w-full px-4 py-2.5 border border-slate-200 text-slate-600 font-medium text-sm rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit Profile
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="space-y-3">
+                {viewingMember.iban ? (
+                  <div className="bg-muted rounded-xl p-4">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">IBAN</p>
+                    <p className="font-mono text-sm text-foreground break-all">{viewingMember.iban}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewingMember.iban!);
+                        setCopiedIban(true);
+                        setTimeout(() => setCopiedIban(false), 2000);
+                      }}
+                      className="mt-2 h-7 text-xs text-primary hover:text-primary gap-1.5 px-0"
+                    >
+                      {copiedIban ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedIban ? "Copied!" : "Copy IBAN"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="bg-muted rounded-xl p-4 text-center">
+                    <p className="text-sm text-muted-foreground">No IBAN set</p>
+                  </div>
+                )}
+                {viewingMember.id === currentUserId && (
+                  <Button variant="outline" asChild className="w-full gap-2">
+                    <Link href="/profile">
+                      <Pencil className="w-4 h-4" />
+                      Edit Profile
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

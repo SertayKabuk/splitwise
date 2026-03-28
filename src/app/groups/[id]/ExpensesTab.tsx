@@ -4,6 +4,25 @@ import { useState } from "react";
 import { CURRENCIES, formatAmount, type CurrencyCode } from "@/lib/currencies";
 import type { Member, Expense, Balance } from "./types";
 import { Avatar } from "./Avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Plus, Eye, Pencil, Trash2, ClipboardList } from "lucide-react";
 
 interface Props {
   groupId: string;
@@ -17,7 +36,6 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
   const fmt = (amount: number, currency: string) => formatAmount(amount, currency as CurrencyCode);
   const memberMap = new Map(members.map((m) => [m.id, m]));
 
-  // Add expense modal
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [expenseTitle, setExpenseTitle] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -31,7 +49,6 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
   const [addExpenseLoading, setAddExpenseLoading] = useState(false);
   const [addExpenseError, setAddExpenseError] = useState("");
 
-  // Edit expense modal
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -43,7 +60,6 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
-  // Delete / view modals
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
@@ -175,25 +191,112 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
     }
   };
 
+  const SplitMemberList = ({
+    splitWith,
+    splitType,
+    shares,
+    onToggle,
+    onShareChange,
+  }: {
+    splitWith: string[];
+    splitType: "equal" | "shares";
+    shares: Record<string, number>;
+    onToggle: (id: string) => void;
+    onShareChange: (id: string, val: number) => void;
+  }) => (
+    <div className="space-y-1">
+      {members.map((m) => {
+        const isSelected = splitWith.includes(m.id);
+        return (
+          <div
+            key={m.id}
+            className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-accent cursor-pointer"
+            onClick={() => onToggle(m.id)}
+          >
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggle(m.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 accent-primary rounded border-border"
+            />
+            <Avatar member={m} size="sm" />
+            <span className="text-sm text-foreground flex-1">{m.id === currentUserId ? "You" : m.name ?? m.email}</span>
+            {splitType === "shares" && isSelected && (
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={shares[m.id] ?? 1}
+                  onChange={(e) => onShareChange(m.id, Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-14 text-center h-8 text-sm"
+                />
+                <span className="text-xs text-muted-foreground">shares</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const SplitPreview = ({
+    splitWith,
+    splitType,
+    shares,
+    amount,
+    currency,
+  }: {
+    splitWith: string[];
+    splitType: "equal" | "shares";
+    shares: Record<string, number>;
+    amount: string;
+    currency: CurrencyCode;
+  }) => {
+    const totalAmount = parseFloat(amount);
+    if (splitWith.length === 0 || !amount || isNaN(totalAmount) || totalAmount <= 0) return null;
+
+    if (splitType === "equal") {
+      return (
+        <p className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-lg">
+          Each person pays: <span className="font-semibold text-foreground">{fmt(totalAmount / splitWith.length, currency)}</span>
+        </p>
+      );
+    }
+
+    const totalShares = splitWith.reduce((sum, id) => sum + (shares[id] ?? 1), 0);
+    return (
+      <div className="bg-muted rounded-lg px-3 py-2.5 space-y-1.5">
+        {splitWith.map((id) => {
+          const m = memberMap.get(id);
+          const myShares = shares[id] ?? 1;
+          return (
+            <div key={id} className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {id === currentUserId ? "You" : m?.name ?? m?.email}
+                <span className="text-muted-foreground/60 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
+              </span>
+              <span className="font-semibold text-foreground">{fmt(totalAmount * myShares / totalShares, currency)}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="flex justify-end mb-4">
-        <button
-          onClick={() => setShowAddExpense(true)}
-          className="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-lg transition-colors text-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+        <Button onClick={() => setShowAddExpense(true)} className="gap-2 w-full sm:w-auto">
+          <Plus className="w-4 h-4" />
           Add Expense
-        </button>
+        </Button>
       </div>
 
       {expenses.length === 0 ? (
-        <div className="text-center py-16 text-slate-500">
-          <svg className="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
+        <div className="text-center py-16 text-muted-foreground">
+          <ClipboardList className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
           <p className="font-medium">No expenses yet</p>
           <p className="text-sm mt-1">Add the first expense for this group</p>
         </div>
@@ -202,25 +305,25 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
           {expenses.map((expense) => (
             <div
               key={expense.id}
-              className="bg-white rounded-xl border border-slate-200 p-4 flex items-start justify-between gap-4"
+              className="bg-card rounded-xl border border-border p-4 flex items-start justify-between gap-4"
             >
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-slate-900">{expense.title}</h3>
-                <p className="text-sm text-slate-500 mt-0.5">
+                <h3 className="font-semibold text-foreground">{expense.title}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
                   Paid by{" "}
-                  <span className="font-medium text-slate-700">
+                  <span className="font-medium text-foreground">
                     {expense.paid_by === currentUserId ? "You" : expense.payer_name ?? expense.payer_email}
                   </span>
                 </p>
                 {expense.splits.length > 0 && (
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Split with:{" "}
                     {expense.splits
                       .map((s) => (s.user_id === currentUserId ? "You" : s.name ?? s.email))
                       .join(", ")}
                   </p>
                 )}
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {new Date(expense.created_at * 1000).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
@@ -229,44 +332,43 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                 </p>
               </div>
               <div className="text-right flex-shrink-0 flex flex-col items-end gap-2">
-                <p className="text-lg font-bold text-emerald-600">{fmt(expense.amount, expense.currency)}</p>
+                <p className="text-lg font-bold text-emerald-500">{fmt(expense.amount, expense.currency)}</p>
                 {(() => {
                   const mySplit = expense.splits.find((s) => s.user_id === currentUserId);
                   return mySplit ? (
-                    <p className="text-xs text-slate-400">Your share: {fmt(mySplit.amount, expense.currency)}</p>
+                    <p className="text-xs text-muted-foreground">Your share: {fmt(mySplit.amount, expense.currency)}</p>
                   ) : null;
                 })()}
-                <div className="flex gap-1.5">
-                  <button
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
                     onClick={() => setViewingExpense(expense)}
-                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                     title="View details"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </button>
+                    <Eye className="w-3.5 h-3.5" />
+                  </Button>
                   {expense.paid_by === currentUserId && (
                     <>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-primary"
                         onClick={() => openEdit(expense)}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         title="Edit expense"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
                         onClick={() => setDeletingExpense(expense)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete expense"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </>
                   )}
                 </div>
@@ -277,319 +379,312 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
       )}
 
       {/* Add Expense Modal */}
-      {showAddExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddExpense(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-semibold text-slate-900">Add Expense</h2>
-              <button onClick={() => setShowAddExpense(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      <Dialog open={showAddExpense} onOpenChange={setShowAddExpense}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Expense</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddExpense} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input
+                value={expenseTitle}
+                onChange={(e) => setExpenseTitle(e.target.value)}
+                placeholder="e.g., Dinner at restaurant"
+              />
             </div>
-            <form onSubmit={handleAddExpense} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Title <span className="text-red-500">*</span></label>
-                <input type="text" value={expenseTitle} onChange={(e) => setExpenseTitle(e.target.value)} placeholder="e.g., Dinner at restaurant" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Currency <span className="text-red-500">*</span></label>
-                <select value={expenseCurrency} onChange={(e) => setExpenseCurrency(e.target.value as CurrencyCode)} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+            <div className="space-y-1.5">
+              <Label>Currency <span className="text-destructive">*</span></Label>
+              <Select value={expenseCurrency} onValueChange={(v) => setExpenseCurrency(v as CurrencyCode)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                   {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
-                    <option key={code} value={code}>{CURRENCIES[code].symbol} — {CURRENCIES[code].name}</option>
+                    <SelectItem key={code} value={code}>
+                      {CURRENCIES[code].symbol} — {CURRENCIES[code].name}
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount ({CURRENCIES[expenseCurrency].symbol}) <span className="text-red-500">*</span></label>
-                <input type="number" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0.00" min="0.01" step="0.01" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Paid by <span className="text-red-500">*</span></label>
-                <select value={expensePaidBy} onChange={(e) => setExpensePaidBy(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount ({CURRENCIES[expenseCurrency].symbol}) <span className="text-destructive">*</span></Label>
+              <Input
+                type="number"
+                value={expenseAmount}
+                onChange={(e) => setExpenseAmount(e.target.value)}
+                placeholder="0.00"
+                min="0.01"
+                step="0.01"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Paid by <span className="text-destructive">*</span></Label>
+              <Select value={expensePaidBy} onValueChange={setExpensePaidBy}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                   {members.map((m) => (
-                    <option key={m.id} value={m.id}>{m.id === currentUserId ? "You" : m.name ?? m.email}</option>
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.id === currentUserId ? "You" : m.name ?? m.email}
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-slate-700">Split with <span className="text-red-500">*</span></label>
-                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
-                    <button type="button" onClick={() => setExpenseSplitType("equal")} className={`px-3 py-1.5 transition-colors ${expenseSplitType === "equal" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Equal</button>
-                    <button type="button" onClick={() => setExpenseSplitType("shares")} className={`px-3 py-1.5 border-l border-slate-200 transition-colors ${expenseSplitType === "shares" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Shares</button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  {members.map((m) => {
-                    const isSelected = expenseSplitWith.includes(m.id);
-                    return (
-                      <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50">
-                        <input type="checkbox" checked={isSelected} onChange={() => toggleSplitMember(m.id)} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
-                        <Avatar member={m} size="sm" />
-                        <span className="text-sm text-slate-700 flex-1">{m.id === currentUserId ? "You" : m.name ?? m.email}</span>
-                        {expenseSplitType === "shares" && isSelected && (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number" min={1} step={1} value={expenseShares[m.id] ?? 1}
-                              onChange={(e) => setExpenseShares((prev) => ({ ...prev, [m.id]: Math.max(1, parseInt(e.target.value) || 1) }))}
-                              className="w-14 text-center border border-slate-200 rounded-lg px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                            <span className="text-xs text-slate-400">shares</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Split with <span className="text-destructive">*</span></Label>
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setExpenseSplitType("equal")}
+                    className={`px-3 py-1.5 transition-colors ${expenseSplitType === "equal" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
+                  >
+                    Equal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpenseSplitType("shares")}
+                    className={`px-3 py-1.5 border-l border-border transition-colors ${expenseSplitType === "shares" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
+                  >
+                    Shares
+                  </button>
                 </div>
               </div>
-              {expenseSplitWith.length > 0 && expenseAmount && parseFloat(expenseAmount) > 0 && (() => {
-                const totalAmount = parseFloat(expenseAmount);
-                if (expenseSplitType === "equal") {
-                  return (
-                    <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
-                      Each person pays: <span className="font-semibold text-slate-700">{fmt(totalAmount / expenseSplitWith.length, expenseCurrency)}</span>
-                    </p>
-                  );
-                }
-                const totalShares = expenseSplitWith.reduce((sum, id) => sum + (expenseShares[id] ?? 1), 0);
-                return (
-                  <div className="bg-slate-50 rounded-lg px-3 py-2.5 space-y-1.5">
-                    {expenseSplitWith.map((id) => {
-                      const m = memberMap.get(id);
-                      const myShares = expenseShares[id] ?? 1;
-                      return (
-                        <div key={id} className="flex items-center justify-between text-sm">
-                          <span className="text-slate-600">
-                            {id === currentUserId ? "You" : m?.name ?? m?.email}
-                            <span className="text-slate-400 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
-                          </span>
-                          <span className="font-semibold text-slate-700">{fmt(totalAmount * myShares / totalShares, expenseCurrency)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-              {addExpenseError && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{addExpenseError}</p>}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowAddExpense(false)} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
-                <button type="submit" disabled={addExpenseLoading} className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors">{addExpenseLoading ? "Adding..." : "Add Expense"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <SplitMemberList
+                splitWith={expenseSplitWith}
+                splitType={expenseSplitType}
+                shares={expenseShares}
+                onToggle={toggleSplitMember}
+                onShareChange={(id, val) => setExpenseShares((prev) => ({ ...prev, [id]: val }))}
+              />
+            </div>
+            <SplitPreview
+              splitWith={expenseSplitWith}
+              splitType={expenseSplitType}
+              shares={expenseShares}
+              amount={expenseAmount}
+              currency={expenseCurrency}
+            />
+            {addExpenseError && (
+              <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">{addExpenseError}</p>
+            )}
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowAddExpense(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={addExpenseLoading} className="flex-1">
+                {addExpenseLoading ? "Adding..." : "Add Expense"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Expense Modal */}
-      {editingExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditingExpense(null)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-semibold text-slate-900">Edit Expense</h2>
-              <button onClick={() => setEditingExpense(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      <Dialog open={!!editingExpense} onOpenChange={(open) => !open && setEditingExpense(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Expense</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
             </div>
-            <form onSubmit={handleEdit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Title <span className="text-red-500">*</span></label>
-                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Currency <span className="text-red-500">*</span></label>
-                <select value={editCurrency} onChange={(e) => setEditCurrency(e.target.value as CurrencyCode)} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+            <div className="space-y-1.5">
+              <Label>Currency <span className="text-destructive">*</span></Label>
+              <Select value={editCurrency} onValueChange={(v) => setEditCurrency(v as CurrencyCode)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                   {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
-                    <option key={code} value={code}>{CURRENCIES[code].symbol} — {CURRENCIES[code].name}</option>
+                    <SelectItem key={code} value={code}>
+                      {CURRENCIES[code].symbol} — {CURRENCIES[code].name}
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Amount ({CURRENCIES[editCurrency].symbol}) <span className="text-red-500">*</span></label>
-                <input type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} min="0.01" step="0.01" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Paid by <span className="text-red-500">*</span></label>
-                <select value={editPaidBy} onChange={(e) => setEditPaidBy(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount ({CURRENCIES[editCurrency].symbol}) <span className="text-destructive">*</span></Label>
+              <Input
+                type="number"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                min="0.01"
+                step="0.01"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Paid by <span className="text-destructive">*</span></Label>
+              <Select value={editPaidBy} onValueChange={setEditPaidBy}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                   {members.map((m) => (
-                    <option key={m.id} value={m.id}>{m.id === currentUserId ? "You" : m.name ?? m.email}</option>
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.id === currentUserId ? "You" : m.name ?? m.email}
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-slate-700">Split with <span className="text-red-500">*</span></label>
-                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
-                    <button type="button" onClick={() => setEditSplitType("equal")} className={`px-3 py-1.5 transition-colors ${editSplitType === "equal" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Equal</button>
-                    <button type="button" onClick={() => setEditSplitType("shares")} className={`px-3 py-1.5 border-l border-slate-200 transition-colors ${editSplitType === "shares" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Shares</button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  {members.map((m) => {
-                    const isSelected = editSplitWith.includes(m.id);
-                    return (
-                      <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50">
-                        <input
-                          type="checkbox" checked={isSelected}
-                          onChange={() => {
-                            if (isSelected) {
-                              setEditSplitWith((prev) => prev.filter((id) => id !== m.id));
-                            } else {
-                              setEditSplitWith((prev) => [...prev, m.id]);
-                              setEditShares((prev) => ({ ...prev, [m.id]: prev[m.id] ?? 1 }));
-                            }
-                          }}
-                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-                        />
-                        <Avatar member={m} size="sm" />
-                        <span className="text-sm text-slate-700 flex-1">{m.id === currentUserId ? "You" : m.name ?? m.email}</span>
-                        {editSplitType === "shares" && isSelected && (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number" min={1} step={1} value={editShares[m.id] ?? 1}
-                              onChange={(e) => setEditShares((prev) => ({ ...prev, [m.id]: Math.max(1, parseInt(e.target.value) || 1) }))}
-                              className="w-14 text-center border border-slate-200 rounded-lg px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                            <span className="text-xs text-slate-400">shares</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Split with <span className="text-destructive">*</span></Label>
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setEditSplitType("equal")}
+                    className={`px-3 py-1.5 transition-colors ${editSplitType === "equal" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
+                  >
+                    Equal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditSplitType("shares")}
+                    className={`px-3 py-1.5 border-l border-border transition-colors ${editSplitType === "shares" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
+                  >
+                    Shares
+                  </button>
                 </div>
               </div>
-              {editSplitWith.length > 0 && editAmount && parseFloat(editAmount) > 0 && (() => {
-                const totalAmount = parseFloat(editAmount);
-                if (editSplitType === "equal") {
-                  return (
-                    <p className="text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
-                      Each person pays: <span className="font-semibold text-slate-700">{fmt(totalAmount / editSplitWith.length, editCurrency)}</span>
-                    </p>
-                  );
-                }
-                const totalShares = editSplitWith.reduce((sum, id) => sum + (editShares[id] ?? 1), 0);
-                return (
-                  <div className="bg-slate-50 rounded-lg px-3 py-2.5 space-y-1.5">
-                    {editSplitWith.map((id) => {
-                      const m = memberMap.get(id);
-                      const myShares = editShares[id] ?? 1;
-                      return (
-                        <div key={id} className="flex items-center justify-between text-sm">
-                          <span className="text-slate-600">
-                            {id === currentUserId ? "You" : m?.name ?? m?.email}
-                            <span className="text-slate-400 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
-                          </span>
-                          <span className="font-semibold text-slate-700">{fmt(totalAmount * myShares / totalShares, editCurrency)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-              {editError && <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditingExpense(null)} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
-                <button type="submit" disabled={editLoading} className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors">{editLoading ? "Saving..." : "Save Changes"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <SplitMemberList
+                splitWith={editSplitWith}
+                splitType={editSplitType}
+                shares={editShares}
+                onToggle={(id) => {
+                  if (editSplitWith.includes(id)) {
+                    setEditSplitWith((prev) => prev.filter((x) => x !== id));
+                  } else {
+                    setEditSplitWith((prev) => [...prev, id]);
+                    setEditShares((prev) => ({ ...prev, [id]: prev[id] ?? 1 }));
+                  }
+                }}
+                onShareChange={(id, val) => setEditShares((prev) => ({ ...prev, [id]: val }))}
+              />
+            </div>
+            <SplitPreview
+              splitWith={editSplitWith}
+              splitType={editSplitType}
+              shares={editShares}
+              amount={editAmount}
+              currency={editCurrency}
+            />
+            {editError && (
+              <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">{editError}</p>
+            )}
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditingExpense(null)} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={editLoading} className="flex-1">
+                {editLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Modal */}
-      {deletingExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeletingExpense(null)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-xl font-semibold text-slate-900 mb-2">Delete Expense</h2>
-            <p className="text-slate-600 mb-6">
+      <Dialog open={!!deletingExpense} onOpenChange={(open) => !open && setDeletingExpense(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Expense</DialogTitle>
+            <DialogDescription>
               Are you sure you want to delete{" "}
-              <span className="font-semibold">&ldquo;{deletingExpense.title}&rdquo;</span>?
+              <span className="font-semibold text-foreground">&ldquo;{deletingExpense?.title}&rdquo;</span>?
               This will also update all balances.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeletingExpense(null)} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
-              <button onClick={handleDelete} disabled={deleteLoading} className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors">{deleteLoading ? "Deleting..." : "Delete"}</button>
-            </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" onClick={() => setDeletingExpense(null)} className="flex-1">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading} className="flex-1">
+              {deleteLoading ? "Deleting..." : "Delete"}
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* View Expense Details Modal */}
-      {viewingExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewingExpense(null)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <button onClick={() => setViewingExpense(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 pr-6">{viewingExpense.title}</h2>
+      <Dialog open={!!viewingExpense} onOpenChange={(open) => !open && setViewingExpense(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="pr-6">{viewingExpense?.title}</DialogTitle>
+          </DialogHeader>
+          {viewingExpense && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Total</span>
-                <span className="text-xl font-bold text-emerald-600">{fmt(viewingExpense.amount, viewingExpense.currency)}</span>
+                <span className="text-sm text-muted-foreground">Total</span>
+                <span className="text-xl font-bold text-emerald-500">{fmt(viewingExpense.amount, viewingExpense.currency)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Paid by</span>
-                <span className="text-sm font-medium text-slate-800">
+                <span className="text-sm text-muted-foreground">Paid by</span>
+                <span className="text-sm font-medium text-foreground">
                   {viewingExpense.paid_by === currentUserId ? "You" : viewingExpense.payer_name ?? viewingExpense.payer_email}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Split type</span>
-                <span className="text-sm font-medium text-slate-800 capitalize">{viewingExpense.split_type}</span>
+                <span className="text-sm text-muted-foreground">Split type</span>
+                <span className="text-sm font-medium text-foreground capitalize">{viewingExpense.split_type}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">Date</span>
-                <span className="text-sm text-slate-600">
+                <span className="text-sm text-muted-foreground">Date</span>
+                <span className="text-sm text-foreground">
                   {new Date(viewingExpense.created_at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </span>
               </div>
               {viewingExpense.splits.length > 0 && (
-                <div className="pt-2 border-t border-slate-100">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Split breakdown</p>
-                  <div className="space-y-1.5">
-                    {viewingExpense.splits.map((s) => (
-                      <div key={s.user_id} className="flex items-center justify-between text-sm">
-                        <span className="text-slate-700">
-                          {s.user_id === currentUserId ? "You" : s.name ?? s.email}
-                          {viewingExpense.split_type === "shares" && (
-                            <span className="text-slate-400 ml-1">({s.shares} share{s.shares !== 1 ? "s" : ""})</span>
-                          )}
-                        </span>
-                        <span className="font-medium text-slate-800">{fmt(s.amount, viewingExpense.currency)}</span>
-                      </div>
-                    ))}
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Split breakdown</p>
+                    <div className="space-y-1.5">
+                      {viewingExpense.splits.map((s) => (
+                        <div key={s.user_id} className="flex items-center justify-between text-sm">
+                          <span className="text-foreground">
+                            {s.user_id === currentUserId ? "You" : s.name ?? s.email}
+                            {viewingExpense.split_type === "shares" && (
+                              <span className="text-muted-foreground ml-1">({s.shares} share{s.shares !== 1 ? "s" : ""})</span>
+                            )}
+                          </span>
+                          <span className="font-medium text-foreground">{fmt(s.amount, viewingExpense.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
               {viewingExpense.paid_by === currentUserId && (
                 <div className="flex gap-2 pt-2">
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() => { setViewingExpense(null); openEdit(viewingExpense); }}
-                    className="flex-1 px-3 py-2 border border-slate-200 text-slate-600 font-medium text-sm rounded-lg hover:bg-slate-50 transition-colors"
+                    className="flex-1"
                   >
                     Edit
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="destructive"
                     onClick={() => { setViewingExpense(null); setDeletingExpense(viewingExpense); }}
-                    className="flex-1 px-3 py-2 border border-red-200 text-red-600 font-medium text-sm rounded-lg hover:bg-red-50 transition-colors"
+                    className="flex-1"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

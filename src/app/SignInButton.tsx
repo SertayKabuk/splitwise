@@ -1,12 +1,15 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { Button } from "@/components/ui/button";
 
 export default function SignInButton() {
   return (
-    <button
+    <Button
       onClick={() => signIn("google")}
-      className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-medium px-6 py-3 rounded-xl shadow-sm transition-all duration-150"
+      variant="outline"
+      size="lg"
+      className="w-full gap-3"
     >
       <svg className="w-5 h-5" viewBox="0 0 24 24">
         <path
@@ -27,6 +30,6 @@ export default function SignInButton() {
         />
       </svg>
       Sign in with Google
-    </button>
+    </Button>
   );
 }

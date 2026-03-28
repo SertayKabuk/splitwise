@@ -4,28 +4,37 @@ import { signOut } from "next-auth/react";
 import { Session } from "next-auth";
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
 import { getInitials } from "@/lib/initials";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { LayoutDashboard, User, LogOut, ChevronDown } from "lucide-react";
 
 interface Props {
   session: Session;
 }
 
 export default function Navbar({ session }: Props) {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const user = session.user;
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
+    <header className="bg-card border-b border-border sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2.5 font-bold text-slate-900 hover:text-indigo-600 transition-colors"
+          className="flex items-center gap-2.5 font-bold text-foreground hover:text-primary transition-colors"
         >
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <svg
-              className="w-5 h-5 text-white"
+              className="w-5 h-5 text-primary-foreground"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -41,83 +50,62 @@ export default function Navbar({ session }: Props) {
           GroupSplit
         </Link>
 
-        {/* User menu */}
-        <div className="relative">
-          <button
-            onClick={() => setDropdownOpen((prev) => !prev)}
-            className="flex items-center gap-2.5 hover:bg-slate-50 px-3 py-2 rounded-lg transition-colors"
-          >
-            {user?.image ? (
-              <Image
-                src={user.image}
-                alt={user.name ?? "User"}
-                width={32}
-                height={32}
-                className="rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                {getInitials(user?.name, user?.email)}
-              </div>
-            )}
-            <span className="text-sm font-medium text-slate-700 hidden sm:block">
-              {user?.name ?? user?.email ?? "User"}
-            </span>
-            <svg
-              className={`w-4 h-4 text-slate-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+        {/* Right side */}
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
 
-          {dropdownOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setDropdownOpen(false)}
-              />
-              <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <p className="text-sm font-semibold text-slate-900 truncate">
-                    {user?.name ?? "User"}
-                  </p>
-                  <p className="text-xs text-slate-500 truncate mt-0.5">{user?.email}</p>
-                </div>
-                <Link
-                  href="/dashboard"
-                  onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                  </svg>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2.5 px-3 py-2">
+                {user?.image ? (
+                  <Image
+                    src={user.image}
+                    alt={user.name ?? "User"}
+                    width={32}
+                    height={32}
+                    className="rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-semibold">
+                    {getInitials(user?.name, user?.email)}
+                  </div>
+                )}
+                <span className="text-sm font-medium hidden sm:block">
+                  {user?.name ?? user?.email ?? "User"}
+                </span>
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>
+                <p className="font-semibold truncate">{user?.name ?? "User"}</p>
+                <p className="text-xs text-muted-foreground font-normal truncate mt-0.5">
+                  {user?.email}
+                </p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard" className="flex items-center gap-2.5">
+                  <LayoutDashboard className="w-4 h-4" />
                   Dashboard
                 </Link>
-                <Link
-                  href="/profile"
-                  onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/profile" className="flex items-center gap-2.5">
+                  <User className="w-4 h-4" />
                   Profile
                 </Link>
-                <button
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Sign out
-                </button>
-              </div>
-            </>
-          )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="text-destructive focus:text-destructive"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

@@ -29,13 +29,13 @@ export function Avatar({ member, size = "md" }: { member: Member; size?: "sm" | 
         alt={member.name ?? member.email}
         width={px}
         height={px}
-        className="rounded-full object-cover"
+        className="rounded-full object-cover flex-shrink-0"
       />
     );
   }
 
   return (
-    <div className={`${sizeClass} ${color} rounded-full flex items-center justify-center text-white font-semibold`}>
+    <div className={`${sizeClass} ${color} rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0`}>
       {getInitials(member.name, member.email)}
     </div>
   );

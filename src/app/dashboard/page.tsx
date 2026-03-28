@@ -4,6 +4,9 @@ import getDb from "@/lib/db";
 import Link from "next/link";
 import CreateGroupForm from "./CreateGroupForm";
 import DeleteGroupButton from "./DeleteGroupButton";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Users, ClipboardList, ArrowRight } from "lucide-react";
 
 interface GroupRow {
   id: string;
@@ -51,8 +54,8 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Groups</h1>
-          <p className="text-slate-500 mt-1">Manage your travel group expenses</p>
+          <h1 className="text-2xl font-bold text-foreground">My Groups</h1>
+          <p className="text-muted-foreground mt-1">Manage your travel group expenses</p>
         </div>
         <CreateGroupForm />
       </div>
@@ -60,40 +63,25 @@ export default async function DashboardPage() {
       {/* Groups Grid */}
       {groups.length === 0 ? (
         <div className="text-center py-20">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-2xl mb-4">
-            <svg
-              className="w-8 h-8 text-slate-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-muted rounded-2xl mb-4">
+            <Users className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">No groups yet</h3>
-          <p className="text-slate-500 max-w-sm mx-auto">
+          <h3 className="text-lg font-semibold text-foreground mb-2">No groups yet</h3>
+          <p className="text-muted-foreground max-w-sm mx-auto">
             Create one or join via invite link to start splitting expenses with your travel companions.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map((group) => (
-            <div
-              key={group.id}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 hover:shadow-md transition-shadow"
-            >
+            <Card key={group.id} className="flex flex-col gap-4 p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="font-semibold text-slate-900 text-lg leading-tight">
+                  <h2 className="font-semibold text-foreground text-lg leading-tight">
                     {group.name}
                   </h2>
                   {group.description && (
-                    <p className="text-slate-500 text-sm mt-1 line-clamp-2">
+                    <p className="text-muted-foreground text-sm mt-1 line-clamp-2">
                       {group.description}
                     </p>
                   )}
@@ -102,8 +90,8 @@ export default async function DashboardPage() {
                   {group.created_by === currentUserId && (
                     <DeleteGroupButton groupId={group.id} />
                   )}
-                  <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                    <span className="text-indigo-600 font-bold text-sm">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <span className="text-primary font-bold text-sm">
                       {group.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
@@ -111,30 +99,23 @@ export default async function DashboardPage() {
               </div>
 
               <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1.5 text-slate-600">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Users className="w-4 h-4" />
                   <span>{group.member_count} member{group.member_count !== 1 ? "s" : ""}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-500">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <ClipboardList className="w-4 h-4" />
                   <span>{group.expense_count} expense{group.expense_count !== 1 ? "s" : ""}</span>
                 </div>
               </div>
 
-              <Link
-                href={`/groups/${group.id}`}
-                className="mt-auto inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm"
-              >
-                View Group
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            </div>
+              <Button asChild className="mt-auto gap-2">
+                <Link href={`/groups/${group.id}`}>
+                  View Group
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </Button>
+            </Card>
           ))}
         </div>
       )}
