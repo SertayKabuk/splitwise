@@ -4,5 +4,4 @@ allowBuilds:
   msw: true
   sharp: true
   unrs-resolver: true
-overrides:
-  "tsconfck>typescript": "^6.0.0"
+
