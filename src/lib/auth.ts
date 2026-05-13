@@ -48,7 +48,7 @@ const config: NextAuthConfig = {
       }
     },
 
-    async session({ session, token }) {
+    async session({ session }) {
       if (session.user?.email) {
         try {
           const db = getDb();

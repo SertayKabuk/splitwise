@@ -4,7 +4,7 @@ import getDb from "@/lib/db";
 import Link from "next/link";
 import CreateGroupForm from "./CreateGroupForm";
 import DeleteGroupButton from "./DeleteGroupButton";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, ClipboardList, ArrowRight } from "lucide-react";
 

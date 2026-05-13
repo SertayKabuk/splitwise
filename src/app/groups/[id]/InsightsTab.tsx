@@ -4,7 +4,6 @@ import { formatAmount, type CurrencyCode } from "@/lib/currencies";
 import type { Member, Expense } from "./types";
 import { Avatar } from "./Avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 
 interface Props {
   expenses: Expense[];

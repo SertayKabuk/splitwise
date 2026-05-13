@@ -32,6 +32,116 @@ interface Props {
   onRefresh: (expenses: Expense[], balances: Balance[]) => void;
 }
 
+interface SplitMemberListProps {
+  members: Member[];
+  currentUserId: string;
+  splitWith: string[];
+  splitType: "equal" | "shares";
+  shares: Record<string, number>;
+  onToggle: (id: string) => void;
+  onShareChange: (id: string, val: number) => void;
+}
+
+function SplitMemberList({
+  members,
+  currentUserId,
+  splitWith,
+  splitType,
+  shares,
+  onToggle,
+  onShareChange,
+}: SplitMemberListProps) {
+  return (
+    <div className="space-y-1">
+      {members.map((m) => {
+        const isSelected = splitWith.includes(m.id);
+        return (
+          <div
+            key={m.id}
+            className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-accent cursor-pointer"
+            onClick={() => onToggle(m.id)}
+          >
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggle(m.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 accent-primary rounded border-border"
+            />
+            <Avatar member={m} size="sm" />
+            <span className="text-sm text-foreground flex-1">{m.id === currentUserId ? "You" : m.name ?? m.email}</span>
+            {splitType === "shares" && isSelected && (
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={shares[m.id] ?? 1}
+                  onChange={(e) => onShareChange(m.id, Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-14 text-center h-8 text-sm"
+                />
+                <span className="text-xs text-muted-foreground">shares</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+interface SplitPreviewProps {
+  splitWith: string[];
+  splitType: "equal" | "shares";
+  shares: Record<string, number>;
+  amount: string;
+  currency: CurrencyCode;
+  memberMap: Map<string, Member>;
+  currentUserId: string;
+  fmt: (amount: number, currency: string) => string;
+}
+
+function SplitPreview({
+  splitWith,
+  splitType,
+  shares,
+  amount,
+  currency,
+  memberMap,
+  currentUserId,
+  fmt,
+}: SplitPreviewProps) {
+  const totalAmount = parseFloat(amount);
+  if (splitWith.length === 0 || !amount || isNaN(totalAmount) || totalAmount <= 0) return null;
+
+  if (splitType === "equal") {
+    return (
+      <p className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-lg">
+        Each person pays: <span className="font-semibold text-foreground">{fmt(totalAmount / splitWith.length, currency)}</span>
+      </p>
+    );
+  }
+
+  const totalShares = splitWith.reduce((sum, id) => sum + (shares[id] ?? 1), 0);
+  return (
+    <div className="bg-muted rounded-lg px-3 py-2.5 space-y-1.5">
+      {splitWith.map((id) => {
+        const m = memberMap.get(id);
+        const myShares = shares[id] ?? 1;
+        return (
+          <div key={id} className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              {id === currentUserId ? "You" : m?.name ?? m?.email}
+              <span className="text-muted-foreground/60 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
+            </span>
+            <span className="font-semibold text-foreground">{fmt(totalAmount * myShares / totalShares, currency)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefresh }: Props) {
   const fmt = (amount: number, currency: string) => formatAmount(amount, currency as CurrencyCode);
   const memberMap = new Map(members.map((m) => [m.id, m]));
@@ -189,100 +299,6 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
     } finally {
       setDeleteLoading(false);
     }
-  };
-
-  const SplitMemberList = ({
-    splitWith,
-    splitType,
-    shares,
-    onToggle,
-    onShareChange,
-  }: {
-    splitWith: string[];
-    splitType: "equal" | "shares";
-    shares: Record<string, number>;
-    onToggle: (id: string) => void;
-    onShareChange: (id: string, val: number) => void;
-  }) => (
-    <div className="space-y-1">
-      {members.map((m) => {
-        const isSelected = splitWith.includes(m.id);
-        return (
-          <div
-            key={m.id}
-            className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-accent cursor-pointer"
-            onClick={() => onToggle(m.id)}
-          >
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => onToggle(m.id)}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 accent-primary rounded border-border"
-            />
-            <Avatar member={m} size="sm" />
-            <span className="text-sm text-foreground flex-1">{m.id === currentUserId ? "You" : m.name ?? m.email}</span>
-            {splitType === "shares" && isSelected && (
-              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={shares[m.id] ?? 1}
-                  onChange={(e) => onShareChange(m.id, Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-14 text-center h-8 text-sm"
-                />
-                <span className="text-xs text-muted-foreground">shares</span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const SplitPreview = ({
-    splitWith,
-    splitType,
-    shares,
-    amount,
-    currency,
-  }: {
-    splitWith: string[];
-    splitType: "equal" | "shares";
-    shares: Record<string, number>;
-    amount: string;
-    currency: CurrencyCode;
-  }) => {
-    const totalAmount = parseFloat(amount);
-    if (splitWith.length === 0 || !amount || isNaN(totalAmount) || totalAmount <= 0) return null;
-
-    if (splitType === "equal") {
-      return (
-        <p className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-lg">
-          Each person pays: <span className="font-semibold text-foreground">{fmt(totalAmount / splitWith.length, currency)}</span>
-        </p>
-      );
-    }
-
-    const totalShares = splitWith.reduce((sum, id) => sum + (shares[id] ?? 1), 0);
-    return (
-      <div className="bg-muted rounded-lg px-3 py-2.5 space-y-1.5">
-        {splitWith.map((id) => {
-          const m = memberMap.get(id);
-          const myShares = shares[id] ?? 1;
-          return (
-            <div key={id} className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                {id === currentUserId ? "You" : m?.name ?? m?.email}
-                <span className="text-muted-foreground/60 ml-1">({myShares} share{myShares !== 1 ? "s" : ""})</span>
-              </span>
-              <span className="font-semibold text-foreground">{fmt(totalAmount * myShares / totalShares, currency)}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
   };
 
   return (
@@ -455,6 +471,8 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                 </div>
               </div>
               <SplitMemberList
+                members={members}
+                currentUserId={currentUserId}
                 splitWith={expenseSplitWith}
                 splitType={expenseSplitType}
                 shares={expenseShares}
@@ -468,6 +486,9 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
               shares={expenseShares}
               amount={expenseAmount}
               currency={expenseCurrency}
+              memberMap={memberMap}
+              currentUserId={currentUserId}
+              fmt={fmt}
             />
             {addExpenseError && (
               <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">{addExpenseError}</p>
@@ -556,6 +577,8 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                 </div>
               </div>
               <SplitMemberList
+                members={members}
+                currentUserId={currentUserId}
                 splitWith={editSplitWith}
                 splitType={editSplitType}
                 shares={editShares}
@@ -576,6 +599,9 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
               shares={editShares}
               amount={editAmount}
               currency={editCurrency}
+              memberMap={memberMap}
+              currentUserId={currentUserId}
+              fmt={fmt}
             />
             {editError && (
               <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">{editError}</p>
