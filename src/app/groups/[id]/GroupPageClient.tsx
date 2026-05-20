@@ -18,7 +18,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Trash2, Share2, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Trash2, Share2, Check, Eye, Copy, RefreshCw } from "lucide-react";
 
 interface Props {
   group: Group;
@@ -38,12 +39,75 @@ export default function GroupPageClient({
   currentUserId,
 }: Props) {
   const router = useRouter();
+  const isCreator = group.created_by === currentUserId;
   const [copied, setCopied] = useState(false);
   const [expenseList, setExpenseList] = useState<Expense[]>(initialExpenses);
   const [balances, setBalances] = useState<Balance[]>(initialBalances);
   const [settlements, setSettlements] = useState<Settlement[]>(initialSettlements);
   const [showDeleteGroup, setShowDeleteGroup] = useState(false);
   const [deleteGroupLoading, setDeleteGroupLoading] = useState(false);
+
+  const [showViewLink, setShowViewLink] = useState(false);
+  const [viewCode, setViewCode] = useState<string | null>(group.view_code);
+  const [copiedViewLink, setCopiedViewLink] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [viewError, setViewError] = useState("");
+
+  const viewUrl =
+    viewCode && typeof window !== "undefined"
+      ? `${window.location.origin}/view/${viewCode}`
+      : viewCode
+      ? `/view/${viewCode}`
+      : "";
+
+  const handleCopyViewLink = () => {
+    if (!viewUrl) return;
+    navigator.clipboard.writeText(viewUrl).then(() => {
+      setCopiedViewLink(true);
+      setTimeout(() => setCopiedViewLink(false), 2000);
+    });
+  };
+
+  const handleShareViewLink = async () => {
+    if (!viewUrl) return;
+    const text = `Here's a read-only view of "${group.name}" on GroupSplit: ${viewUrl}`;
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: `${group.name} on GroupSplit`,
+          text,
+          url: viewUrl,
+        });
+        return;
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return;
+      }
+    }
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(text)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
+  const handleRotateViewCode = async () => {
+    if (!confirm("Regenerate the read-only link? The current link will stop working.")) return;
+    setRotating(true);
+    setViewError("");
+    try {
+      const res = await fetch(`/api/groups/${group.id}/view-code`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "Failed to regenerate link");
+      }
+      const data = await res.json();
+      setViewCode(data.view_code as string);
+    } catch (err) {
+      setViewError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setRotating(false);
+    }
+  };
 
   const refreshBalancesAndSettlements = async () => {
     const [balancesRes, settlementsRes] = await Promise.all([
@@ -104,7 +168,21 @@ export default function GroupPageClient({
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          {group.created_by === currentUserId && (
+          {isCreator && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                setViewError("");
+                setShowViewLink(true);
+              }}
+              className="text-muted-foreground hover:text-primary"
+              title="Read-only link"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+          )}
+          {isCreator && (
             <Button
               variant="outline"
               size="icon"
@@ -223,6 +301,57 @@ export default function GroupPageClient({
             >
               {deleteGroupLoading ? "Deleting..." : "Delete Group"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Read-only Link Modal */}
+      <Dialog open={showViewLink} onOpenChange={setShowViewLink}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Read-only link</DialogTitle>
+            <DialogDescription>
+              Anyone with this link can view expenses and balances. They can&apos;t add, edit, or
+              see member contact info.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Input value={viewUrl} readOnly className="font-mono text-xs" />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopyViewLink}
+                title="Copy link"
+              >
+                {copiedViewLink ? (
+                  <Check className="w-4 h-4 text-emerald-500" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            {viewError && (
+              <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">
+                {viewError}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button onClick={handleShareViewLink} className="flex-1 gap-2">
+                <Share2 className="w-4 h-4" />
+                Share
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleRotateViewCode}
+                disabled={rotating}
+                className="gap-2"
+                title="Regenerate"
+              >
+                <RefreshCw className={`w-4 h-4 ${rotating ? "animate-spin" : ""}`} />
+                {rotating ? "Regenerating..." : "Regenerate"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

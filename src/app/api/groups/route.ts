@@ -54,16 +54,17 @@ export async function POST(req: NextRequest) {
   const db = getDb();
   const groupId = randomUUID();
   const inviteCode = randomBytes(4).toString("hex");
+  const viewCode = randomBytes(16).toString("hex");
 
   const insertGroup = db.prepare(
-    "INSERT INTO groups (id, name, description, invite_code, created_by) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO groups (id, name, description, invite_code, view_code, created_by) VALUES (?, ?, ?, ?, ?, ?)"
   );
   const insertMember = db.prepare(
     "INSERT INTO group_members (id, group_id, user_id) VALUES (?, ?, ?)"
   );
 
   db.transaction(() => {
-    insertGroup.run(groupId, name.trim(), description?.trim() ?? null, inviteCode, session.user.id);
+    insertGroup.run(groupId, name.trim(), description?.trim() ?? null, inviteCode, viewCode, session.user.id);
     insertMember.run(randomUUID(), groupId, session.user.id);
   })();
 

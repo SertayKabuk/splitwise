@@ -102,6 +102,16 @@ export function BalancesTab({ groupId, balances, members, currentUserId, onSettl
                     Settle
                   </Button>
                 )}
+                {balance.toUserId === currentUserId && balance.fromUserId !== currentUserId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSettleDebt(balance)}
+                    className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950"
+                  >
+                    Mark as received
+                  </Button>
+                )}
               </div>
             </div>
           ))}
@@ -128,16 +138,18 @@ export function BalancesTab({ groupId, balances, members, currentUserId, onSettl
                   </span>
                   ?
                 </span>
-                {settleDebt && memberMap.get(settleDebt.toUserId)?.iban && (
-                  <div className="bg-muted rounded-lg px-3 py-2.5 mt-3">
-                    <p className="text-xs text-muted-foreground mb-0.5">
-                      {settleDebt.toUserId === currentUserId ? "Your" : `${settleDebt.toUserName}'s`} IBAN
-                    </p>
-                    <p className="font-mono text-sm text-foreground break-all">
-                      {memberMap.get(settleDebt.toUserId)?.iban}
-                    </p>
-                  </div>
-                )}
+                {settleDebt &&
+                  settleDebt.fromUserId === currentUserId &&
+                  memberMap.get(settleDebt.toUserId)?.iban && (
+                    <div className="bg-muted rounded-lg px-3 py-2.5 mt-3">
+                      <p className="text-xs text-muted-foreground mb-0.5">
+                        {settleDebt.toUserName}&apos;s IBAN
+                      </p>
+                      <p className="font-mono text-sm text-foreground break-all">
+                        {memberMap.get(settleDebt.toUserId)?.iban}
+                      </p>
+                    </div>
+                  )}
               </div>
             </DialogDescription>
           </DialogHeader>

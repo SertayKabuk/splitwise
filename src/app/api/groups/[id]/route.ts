@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
   const group = db
     .prepare(
-      "SELECT id, name, description, invite_code, created_by, created_at FROM groups WHERE id = ?"
+      "SELECT id, name, description, invite_code, view_code, created_by, created_at FROM groups WHERE id = ?"
     )
     .get(id);
 
@@ -34,19 +34,46 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
 
-  const members = db
+  const groupRow = group as { id: string; name: string; description: string | null; invite_code: string; view_code: string | null; created_by: string; created_at: number };
+  const isCreator = groupRow.created_by === session.user.id;
+
+  const rawMembers = db
     .prepare(
       `
-      SELECT u.id, u.name, u.email, u.image, u.iban, gm.joined_at
+      SELECT u.id, u.name, u.email, u.image, u.iban, u.is_placeholder, u.claim_code, gm.joined_at
       FROM group_members gm
       JOIN users u ON gm.user_id = u.id
       WHERE gm.group_id = ?
       ORDER BY gm.joined_at ASC
     `
     )
-    .all(id);
+    .all(id) as Array<{
+      id: string;
+      name: string | null;
+      email: string;
+      image: string | null;
+      iban: string | null;
+      is_placeholder: number;
+      claim_code: string | null;
+      joined_at: number;
+    }>;
 
-  return NextResponse.json({ ...group as object, members });
+  const members = rawMembers.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    image: m.image,
+    iban: m.iban,
+    joined_at: m.joined_at,
+    is_placeholder: m.is_placeholder === 1,
+    claim_code: isCreator ? m.claim_code : null,
+  }));
+
+  return NextResponse.json({
+    ...groupRow,
+    view_code: isCreator ? groupRow.view_code : null,
+    members,
+  });
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {

@@ -29,12 +29,13 @@ export default async function GroupPage({ params }: PageProps) {
 
   // Fetch group
   const group = db
-    .prepare("SELECT id, name, description, invite_code, created_by, created_at FROM groups WHERE id = ?")
+    .prepare("SELECT id, name, description, invite_code, view_code, created_by, created_at FROM groups WHERE id = ?")
     .get(groupId) as {
       id: string;
       name: string;
       description: string | null;
       invite_code: string;
+      view_code: string | null;
       created_by: string;
       created_at: number;
     } | undefined;
@@ -44,9 +45,9 @@ export default async function GroupPage({ params }: PageProps) {
   }
 
   // Fetch members
-  const members = db
+  const rawMembers = db
     .prepare(
-      `SELECT u.id, u.name, u.email, u.image, u.iban, gm.joined_at
+      `SELECT u.id, u.name, u.email, u.image, u.iban, u.is_placeholder, u.claim_code, gm.joined_at
        FROM group_members gm
        JOIN users u ON gm.user_id = u.id
        WHERE gm.group_id = ?
@@ -58,8 +59,22 @@ export default async function GroupPage({ params }: PageProps) {
       email: string;
       image: string | null;
       iban: string | null;
+      is_placeholder: number;
+      claim_code: string | null;
       joined_at: number;
     }>;
+
+  const isCreator = group.created_by === session.user.id;
+  const members = rawMembers.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    image: m.image,
+    iban: m.iban,
+    joined_at: m.joined_at,
+    is_placeholder: m.is_placeholder === 1,
+    claim_code: isCreator ? m.claim_code : null,
+  }));
 
   // Fetch expenses with payer info and splits
   const rawExpenses = db
@@ -160,9 +175,14 @@ export default async function GroupPage({ params }: PageProps) {
     rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency }))
   );
 
+  const groupForClient = {
+    ...group,
+    view_code: isCreator ? group.view_code : null,
+  };
+
   return (
     <GroupPageClient
-      group={group}
+      group={groupForClient}
       members={members}
       expenses={expenses}
       balances={balances}

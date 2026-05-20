@@ -5,6 +5,8 @@ export interface Member {
   image: string | null;
   iban: string | null;
   joined_at: number;
+  is_placeholder: boolean;
+  claim_code: string | null;
 }
 
 export interface ExpenseSplit {
@@ -54,6 +56,7 @@ export interface Group {
   name: string;
   description: string | null;
   invite_code: string;
+  view_code: string | null;
   created_by: string;
   created_at: number;
 }
