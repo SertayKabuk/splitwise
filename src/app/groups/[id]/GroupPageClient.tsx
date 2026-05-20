@@ -19,7 +19,20 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Trash2, Share2, Check, Eye, Copy, RefreshCw } from "lucide-react";
+import {
+  Trash2,
+  Share2,
+  Check,
+  Eye,
+  Copy,
+  RefreshCw,
+  Receipt,
+  Scale,
+  ArrowLeftRight,
+  Users,
+  BarChart3,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Props {
   group: Group;
@@ -41,6 +54,7 @@ export default function GroupPageClient({
   const router = useRouter();
   const isCreator = group.created_by === currentUserId;
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState("expenses");
   const [expenseList, setExpenseList] = useState<Expense[]>(initialExpenses);
   const [balances, setBalances] = useState<Balance[]>(initialBalances);
   const [settlements, setSettlements] = useState<Settlement[]>(initialSettlements);
@@ -156,8 +170,22 @@ export default function GroupPageClient({
     }
   };
 
+  const mobileTabs: {
+    value: string;
+    label: string;
+    icon: typeof Receipt;
+    count: number;
+    dotClass: string;
+  }[] = [
+    { value: "expenses", label: "Expenses", icon: Receipt, count: expenseList.length, dotClass: "bg-foreground/70" },
+    { value: "balances", label: "Balances", icon: Scale, count: balances.length, dotClass: "bg-destructive" },
+    { value: "transactions", label: "Activity", icon: ArrowLeftRight, count: settlements.length, dotClass: "bg-emerald-500" },
+    { value: "members", label: "Members", icon: Users, count: 0, dotClass: "" },
+    { value: "insights", label: "Insights", icon: BarChart3, count: 0, dotClass: "" },
+  ];
+
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8">
+    <main className="max-w-4xl mx-auto px-4 py-8 pb-24 sm:pb-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-4 mb-8">
         <div className="flex-1">
@@ -176,7 +204,7 @@ export default function GroupPageClient({
                 setViewError("");
                 setShowViewLink(true);
               }}
-              className="text-muted-foreground hover:text-primary"
+              className="shrink-0 text-muted-foreground hover:text-primary"
               title="Read-only link"
             >
               <Eye className="w-4 h-4" />
@@ -187,7 +215,7 @@ export default function GroupPageClient({
               variant="outline"
               size="icon"
               onClick={() => setShowDeleteGroup(true)}
-              className="text-muted-foreground hover:text-destructive hover:border-destructive/50 hover:bg-destructive/10"
+              className="shrink-0 text-muted-foreground hover:text-destructive hover:border-destructive/50 hover:bg-destructive/10"
               title="Delete group"
             >
               <Trash2 className="w-4 h-4" />
@@ -196,17 +224,20 @@ export default function GroupPageClient({
           <Button
             variant="outline"
             onClick={handleCopyInvite}
-            className={`gap-2 w-full sm:w-auto ${copied ? "text-emerald-600 border-emerald-300" : ""}`}
+            className={cn(
+              "gap-2 flex-1 min-w-0 sm:flex-none sm:w-auto",
+              copied && "text-emerald-600 border-emerald-300"
+            )}
           >
             {copied ? (
               <>
-                <Check className="w-4 h-4 text-emerald-500" />
-                Copied!
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span className="truncate">Copied!</span>
               </>
             ) : (
               <>
-                <Share2 className="w-4 h-4" />
-                Share Invite Link
+                <Share2 className="w-4 h-4 shrink-0" />
+                <span className="truncate">Share Invite Link</span>
               </>
             )}
           </Button>
@@ -214,8 +245,8 @@ export default function GroupPageClient({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="expenses">
-        <TabsList className="mb-6 w-full overflow-x-auto flex h-auto flex-wrap sm:flex-nowrap">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6 w-full hidden sm:inline-flex">
           <TabsTrigger value="expenses" className="gap-1.5">
             Expenses
             {expenseList.length > 0 && (
@@ -304,6 +335,46 @@ export default function GroupPageClient({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Mobile bottom tab bar */}
+      <nav
+        className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border pb-[env(safe-area-inset-bottom)]"
+        aria-label="Group sections"
+      >
+        <div className="flex">
+          {mobileTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setActiveTab(tab.value)}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "relative flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium transition-colors",
+                  isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="relative">
+                  <Icon className="w-5 h-5" />
+                  {tab.count > 0 && (
+                    <span
+                      className={cn(
+                        "absolute -top-1 -right-1.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-semibold text-white flex items-center justify-center",
+                        tab.dotClass || "bg-foreground/70"
+                      )}
+                    >
+                      {tab.count > 99 ? "99+" : tab.count}
+                    </span>
+                  )}
+                </span>
+                <span className="truncate max-w-full px-1">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* Read-only Link Modal */}
       <Dialog open={showViewLink} onOpenChange={setShowViewLink}>
