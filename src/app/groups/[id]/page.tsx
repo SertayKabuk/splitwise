@@ -34,7 +34,19 @@ export default async function GroupPage({ params }: PageProps) {
   }
 
   // Fetch members
-  const members = getGroupMembers(groupId);
+  const rawMembers = getGroupMembers(groupId);
+
+  const isCreator = group.created_by === session.user.id;
+  const members = rawMembers.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    image: m.image,
+    iban: m.iban,
+    joined_at: m.joined_at,
+    is_placeholder: m.is_placeholder,
+    claim_code: isCreator ? m.claim_code : null,
+  }));
 
   // Fetch expenses with payer info and splits
   const rawExpenses = getExpensesByGroupId(groupId);
@@ -79,9 +91,14 @@ export default async function GroupPage({ params }: PageProps) {
     rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency }))
   );
 
+  const groupForClient = {
+    ...group,
+    view_code: isCreator ? group.view_code : null,
+  };
+
   return (
     <GroupPageClient
-      group={group}
+      group={groupForClient}
       members={members}
       expenses={expenses}
       balances={balances}

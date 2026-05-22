@@ -32,7 +32,9 @@ describe("POST /api/groups/[id]/settle", () => {
     db.close();
   });
 
-  it("returns 403 when user tries to settle someone else's debt", async () => {
+  it("returns 403 when the requester is neither payer nor recipient", async () => {
+    (auth as unknown as Mock).mockResolvedValue({ user: { id: "u3" } });
+
     const req = new NextRequest("http://localhost/api/groups/g1/settle", {
       method: "POST",
       body: JSON.stringify({
@@ -47,7 +49,35 @@ describe("POST /api/groups/[id]/settle", () => {
     const res = await POST(req, { params: Promise.resolve({ id: "g1" }) });
 
     expect(res.status).toBe(403);
-    await expect(res.json()).resolves.toEqual({ error: "You can only settle your own debts" });
+    await expect(res.json()).resolves.toEqual({
+      error: "Only the payer or recipient can record this settlement",
+    });
+  });
+
+  it("creates a settlement when the recipient records that they were paid", async () => {
+    (randomUUID as unknown as Mock).mockReturnValue("settlement-recv");
+
+    const req = new NextRequest("http://localhost/api/groups/g1/settle", {
+      method: "POST",
+      body: JSON.stringify({
+        fromUser: "u2",
+        toUser: "u1",
+        amount: 25,
+        currency: "TRY",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: "g1" }) });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ success: true });
+
+    const settlement = db
+      .prepare("SELECT from_user, to_user FROM settlements WHERE id = ?")
+      .get("settlement-recv") as { from_user: string; to_user: string };
+
+    expect(settlement).toEqual({ from_user: "u2", to_user: "u1" });
   });
 
   it("creates a settlement when the debtor records their own payment", async () => {

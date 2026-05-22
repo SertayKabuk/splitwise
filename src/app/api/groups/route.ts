@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
 
   const groupId = randomUUID();
   const inviteCode = randomBytes(4).toString("hex");
+  const viewCode = randomBytes(16).toString("hex");
 
   createGroupWithMember(
     {
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
       name: name.trim(),
       description: description?.trim() ?? null,
       invite_code: inviteCode,
+      view_code: viewCode,
       created_by: session.user.id,
     },
     {

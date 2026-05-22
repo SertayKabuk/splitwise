@@ -48,8 +48,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!currency || !(currency in CURRENCIES)) {
     return NextResponse.json({ error: "A valid currency is required" }, { status: 400 });
   }
-  if (fromUser !== session.user.id) {
-    return NextResponse.json({ error: "You can only settle your own debts" }, { status: 403 });
+  if (fromUser !== session.user.id && toUser !== session.user.id) {
+    return NextResponse.json(
+      { error: "Only the payer or recipient can record this settlement" },
+      { status: 403 }
+    );
   }
 
   // Validate both users are group members

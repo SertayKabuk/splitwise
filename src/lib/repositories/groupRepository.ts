@@ -5,6 +5,7 @@ export interface DbGroup {
   name: string;
   description: string | null;
   invite_code: string;
+  view_code: string | null;
   created_by: string;
   created_at: number;
 }
@@ -27,6 +28,8 @@ export interface GroupMemberWithUser {
   email: string;
   image: string | null;
   iban: string | null;
+  is_placeholder: boolean;
+  claim_code: string | null;
   joined_at: number;
 }
 
@@ -40,6 +43,7 @@ export function getUserGroups(userId: string): GroupWithCounts[] {
         g.name,
         g.description,
         g.invite_code,
+        g.view_code,
         g.created_by,
         g.created_at,
         (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count,
@@ -57,12 +61,13 @@ export function createGroup(group: {
   name: string;
   description: string | null;
   invite_code: string;
+  view_code: string | null;
   created_by: string;
 }): void {
   const db = getDb();
   db.prepare(
-    "INSERT INTO groups (id, name, description, invite_code, created_by) VALUES (?, ?, ?, ?, ?)"
-  ).run(group.id, group.name, group.description, group.invite_code, group.created_by);
+    "INSERT INTO groups (id, name, description, invite_code, view_code, created_by) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(group.id, group.name, group.description, group.invite_code, group.view_code, group.created_by);
 }
 
 export function addGroupMember(member: {
@@ -80,24 +85,43 @@ export function getGroupById(groupId: string): DbGroup | undefined {
   const db = getDb();
   return db
     .prepare(
-      "SELECT id, name, description, invite_code, created_by, created_at FROM groups WHERE id = ?"
+      "SELECT id, name, description, invite_code, view_code, created_by, created_at FROM groups WHERE id = ?"
     )
     .get(groupId) as DbGroup | undefined;
 }
 
 export function getGroupMembers(groupId: string): GroupMemberWithUser[] {
   const db = getDb();
-  return db
+  const rows = db
     .prepare(
       `
-      SELECT u.id, u.name, u.email, u.image, u.iban, gm.joined_at
+      SELECT u.id, u.name, u.email, u.image, u.iban, u.is_placeholder, u.claim_code, gm.joined_at
       FROM group_members gm
       JOIN users u ON gm.user_id = u.id
       WHERE gm.group_id = ?
       ORDER BY gm.joined_at ASC
       `
     )
-    .all(groupId) as GroupMemberWithUser[];
+    .all(groupId) as Array<{
+      id: string;
+      name: string | null;
+      email: string;
+      image: string | null;
+      iban: string | null;
+      is_placeholder: number;
+      claim_code: string | null;
+      joined_at: number;
+    }>;
+  return rows.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    image: m.image,
+    iban: m.iban,
+    is_placeholder: m.is_placeholder === 1,
+    claim_code: m.claim_code,
+    joined_at: m.joined_at,
+  }));
 }
 
 export function getValidGroupMemberIds(groupId: string, userIds: string[]): string[] {
@@ -136,6 +160,7 @@ export function getGroupByInviteCode(
         g.name,
         g.description,
         g.invite_code,
+        g.view_code,
         g.created_by,
         g.created_at,
         COUNT(gm.id) as member_count
@@ -156,7 +181,7 @@ export function getGroupByIdFromInviteCode(inviteCode: string): { id: string } |
 }
 
 export function createGroupWithMember(
-  group: { id: string; name: string; description: string | null; invite_code: string; created_by: string },
+  group: { id: string; name: string; description: string | null; invite_code: string; view_code: string | null; created_by: string },
   member: { id: string; group_id: string; user_id: string }
 ): void {
   const db = getDb();

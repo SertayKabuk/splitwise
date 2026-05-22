@@ -27,9 +27,26 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
 
-  const members = getGroupMembers(id);
+  const isCreator = group.created_by === session.user.id;
 
-  return NextResponse.json({ ...group as object, members });
+  const rawMembers = getGroupMembers(id);
+
+  const members = rawMembers.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    image: m.image,
+    iban: m.iban,
+    joined_at: m.joined_at,
+    is_placeholder: m.is_placeholder,
+    claim_code: isCreator ? m.claim_code : null,
+  }));
+
+  return NextResponse.json({
+    ...group,
+    view_code: isCreator ? group.view_code : null,
+    members,
+  });
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
