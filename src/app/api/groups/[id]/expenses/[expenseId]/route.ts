@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import getDb from "@/lib/db";
-import { randomUUID } from "crypto";
+import { getGroupMembership, getValidGroupMemberIds } from "@/lib/repositories/groupRepository";
+import { getExpenseByIdAndGroupId, updateExpense, getExpenseById, deleteExpense } from "@/lib/repositories/expenseRepository";
 import { computeSplits, type SplitType, type SplitInput } from "@/lib/splits";
 import { CURRENCIES } from "@/lib/currencies";
 
@@ -15,20 +15,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
   const { id: groupId, expenseId } = await params;
 
-  const membership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, session.user.id);
+  const membership = getGroupMembership(groupId, session.user.id);
 
   if (!membership) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const existing = db
-    .prepare("SELECT id, paid_by FROM expenses WHERE id = ? AND group_id = ?")
-    .get(expenseId, groupId) as { id: string; paid_by: string } | undefined;
+  const existing = getExpenseByIdAndGroupId(expenseId, groupId);
 
   if (!existing) {
     return NextResponse.json({ error: "Expense not found" }, { status: 404 });
@@ -72,11 +67,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   }
 
   const allUserIds = Array.from(new Set([paidBy, ...splitWith.map((s) => s.userId)]));
-  const placeholders = allUserIds.map(() => "?").join(",");
-  const validMembers = db
-    .prepare(`SELECT user_id FROM group_members WHERE group_id = ? AND user_id IN (${placeholders})`)
-    .all(groupId, ...allUserIds) as Array<{ user_id: string }>;
-  const validIds = new Set(validMembers.map((m) => m.user_id));
+  const validMembers = getValidGroupMemberIds(groupId, allUserIds);
+  const validIds = new Set(validMembers);
 
   if (!validIds.has(paidBy)) {
     return NextResponse.json({ error: "Payer is not a group member" }, { status: 400 });
@@ -89,25 +81,23 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   const computedSplits = computeSplits(amount, splitWith as SplitInput[], splitType as SplitType);
   const sharesMap = new Map(splitWith.map((s) => [s.userId, s.shares]));
 
-  db.transaction(() => {
-    db.prepare("UPDATE expenses SET title = ?, amount = ?, currency = ?, paid_by = ?, split_type = ? WHERE id = ?").run(
-      title.trim(),
+  updateExpense(
+    expenseId,
+    {
+      title: title.trim(),
       amount,
       currency,
-      paidBy,
-      splitType,
-      expenseId
-    );
-    db.prepare("DELETE FROM expense_splits WHERE expense_id = ?").run(expenseId);
-    const insertSplit = db.prepare(
-      "INSERT INTO expense_splits (id, expense_id, user_id, amount, shares) VALUES (?, ?, ?, ?, ?)"
-    );
-    for (const { userId, amount: splitAmt } of computedSplits) {
-      insertSplit.run(randomUUID(), expenseId, userId, splitAmt, sharesMap.get(userId) ?? 1);
-    }
-  })();
+      paid_by: paidBy,
+      split_type: splitType,
+    },
+    computedSplits.map((s) => ({
+      user_id: s.userId,
+      amount: s.amount,
+      shares: sharesMap.get(s.userId) ?? 1,
+    }))
+  );
 
-  const updated = db.prepare("SELECT * FROM expenses WHERE id = ?").get(expenseId);
+  const updated = getExpenseById(expenseId);
   return NextResponse.json(updated);
 }
 
@@ -117,20 +107,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
   const { id: groupId, expenseId } = await params;
 
-  const membership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, session.user.id);
+  const membership = getGroupMembership(groupId, session.user.id);
 
   if (!membership) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const existing = db
-    .prepare("SELECT id, paid_by FROM expenses WHERE id = ? AND group_id = ?")
-    .get(expenseId, groupId) as { id: string; paid_by: string } | undefined;
+  const existing = getExpenseByIdAndGroupId(expenseId, groupId);
 
   if (!existing) {
     return NextResponse.json({ error: "Expense not found" }, { status: 404 });
@@ -140,10 +125,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Only the expense payer can delete it" }, { status: 403 });
   }
 
-  db.transaction(() => {
-    db.prepare("DELETE FROM expense_splits WHERE expense_id = ?").run(expenseId);
-    db.prepare("DELETE FROM expenses WHERE id = ?").run(expenseId);
-  })();
+  deleteExpense(expenseId);
 
   return NextResponse.json({ success: true });
 }

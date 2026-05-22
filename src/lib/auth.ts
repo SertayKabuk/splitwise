@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { randomUUID } from "crypto";
-import getDb from "./db";
+import { getUserByEmail, createUser, updateUserProfile } from "./repositories/userRepository";
 import type { NextAuthConfig } from "next-auth";
 
 const config: NextAuthConfig = {
@@ -22,23 +22,23 @@ const config: NextAuthConfig = {
       if (!user.email) return false;
 
       try {
-        const db = getDb();
-
         // Check if user exists
-        const existing = db
-          .prepare("SELECT id FROM users WHERE email = ?")
-          .get(user.email) as { id: string } | undefined;
+        const existing = getUserByEmail(user.email);
 
         if (!existing) {
           // Insert new user
-          db.prepare(
-            "INSERT OR IGNORE INTO users (id, email, name, image) VALUES (?, ?, ?, ?)"
-          ).run(randomUUID(), user.email, user.name ?? null, user.image ?? null);
+          createUser({
+            id: randomUUID(),
+            email: user.email,
+            name: user.name ?? null,
+            image: user.image ?? null,
+          });
         } else {
           // Update existing user's name and image
-          db.prepare(
-            "UPDATE users SET name = ?, image = ? WHERE email = ?"
-          ).run(user.name ?? null, user.image ?? null, user.email);
+          updateUserProfile(user.email, {
+            name: user.name ?? null,
+            image: user.image ?? null,
+          });
         }
 
         return true;
@@ -51,10 +51,7 @@ const config: NextAuthConfig = {
     async session({ session }) {
       if (session.user?.email) {
         try {
-          const db = getDb();
-          const dbUser = db
-            .prepare("SELECT id FROM users WHERE email = ?")
-            .get(session.user.email) as { id: string } | undefined;
+          const dbUser = getUserByEmail(session.user.email);
 
           if (dbUser) {
             session.user.id = dbUser.id;

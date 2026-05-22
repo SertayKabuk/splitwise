@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import getDb from "@/lib/db";
+import { getUserById, updateUserIban } from "@/lib/repositories/userRepository";
 
 export async function GET() {
   const session = await auth();
@@ -8,16 +8,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
-  const user = db
-    .prepare("SELECT id, email, name, image, iban FROM users WHERE id = ?")
-    .get(session.user.id) as {
-      id: string;
-      email: string;
-      name: string | null;
-      image: string | null;
-      iban: string | null;
-    } | undefined;
+  const user = getUserById(session.user.id);
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -41,12 +32,9 @@ export async function PUT(req: NextRequest) {
 
   const iban = body.iban?.trim() ?? null;
 
-  const db = getDb();
-  db.prepare("UPDATE users SET iban = ? WHERE id = ?").run(iban || null, session.user.id);
+  updateUserIban(session.user.id, iban || null);
 
-  const user = db
-    .prepare("SELECT id, email, name, image, iban FROM users WHERE id = ?")
-    .get(session.user.id);
+  const user = getUserById(session.user.id);
 
   return NextResponse.json(user);
 }

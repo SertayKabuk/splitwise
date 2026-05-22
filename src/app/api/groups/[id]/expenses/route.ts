@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import getDb from "@/lib/db";
+import { getGroupMembership, getValidGroupMemberIds } from "@/lib/repositories/groupRepository";
+import { getExpensesByGroupId, getExpenseSplitsByGroupId, createExpense, getExpenseById } from "@/lib/repositories/expenseRepository";
 import { randomUUID } from "crypto";
 import { computeSplits, type SplitType, type SplitInput } from "@/lib/splits";
 import { CURRENCIES } from "@/lib/currencies";
@@ -15,73 +16,18 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
   const { id: groupId } = await params;
 
   // Verify membership
-  const membership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, session.user.id);
+  const membership = getGroupMembership(groupId, session.user.id);
 
   if (!membership) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const expenses = db
-    .prepare(
-      `
-      SELECT
-        e.id,
-        e.title,
-        e.amount,
-        e.currency,
-        e.paid_by,
-        e.split_type,
-        e.created_at,
-        u.name as payer_name,
-        u.email as payer_email
-      FROM expenses e
-      JOIN users u ON e.paid_by = u.id
-      WHERE e.group_id = ?
-      ORDER BY e.created_at DESC
-    `
-    )
-    .all(groupId) as Array<{
-      id: string;
-      title: string;
-      amount: number;
-      currency: string;
-      paid_by: string;
-      split_type: string;
-      created_at: number;
-      payer_name: string | null;
-      payer_email: string;
-    }>;
+  const expenses = getExpensesByGroupId(groupId);
 
-  const splits = db
-    .prepare(
-      `
-      SELECT
-        es.expense_id,
-        es.user_id,
-        es.amount,
-        es.shares,
-        u.name,
-        u.email
-      FROM expense_splits es
-      JOIN users u ON es.user_id = u.id
-      JOIN expenses e ON es.expense_id = e.id
-      WHERE e.group_id = ?
-    `
-    )
-    .all(groupId) as Array<{
-      expense_id: string;
-      user_id: string;
-      amount: number;
-      shares: number;
-      name: string | null;
-      email: string;
-    }>;
+  const splits = getExpenseSplitsByGroupId(groupId);
 
   const splitsByExpense: Record<string, typeof splits> = {};
   for (const split of splits) {
@@ -105,13 +51,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
   const { id: groupId } = await params;
 
   // Verify membership
-  const membership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, session.user.id);
+  const membership = getGroupMembership(groupId, session.user.id);
 
   if (!membership) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -150,13 +93,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // Validate payer and all split users are group members in two queries
+  // Validate payer and all split users are group members
   const allUserIds = Array.from(new Set([paidBy, ...splitWith.map((s) => s.userId)]));
-  const placeholders = allUserIds.map(() => "?").join(",");
-  const validMembers = db
-    .prepare(`SELECT user_id FROM group_members WHERE group_id = ? AND user_id IN (${placeholders})`)
-    .all(groupId, ...allUserIds) as Array<{ user_id: string }>;
-  const validIds = new Set(validMembers.map((m) => m.user_id));
+  const validMembers = getValidGroupMemberIds(groupId, allUserIds);
+  const validIds = new Set(validMembers);
 
   if (!validIds.has(paidBy)) {
     return NextResponse.json({ error: "Payer is not a group member" }, { status: 400 });
@@ -170,20 +110,23 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const expenseId = randomUUID();
   const sharesMap = new Map(splitWith.map((s) => [s.userId, s.shares]));
 
-  const insertExpense = db.prepare(
-    "INSERT INTO expenses (id, group_id, title, amount, currency, paid_by, split_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  );
-  const insertSplit = db.prepare(
-    "INSERT INTO expense_splits (id, expense_id, user_id, amount, shares) VALUES (?, ?, ?, ?, ?)"
+  createExpense(
+    {
+      id: expenseId,
+      group_id: groupId,
+      title: title.trim(),
+      amount,
+      currency,
+      paid_by: paidBy,
+      split_type: splitType,
+    },
+    computedSplits.map((s) => ({
+      user_id: s.userId,
+      amount: s.amount,
+      shares: sharesMap.get(s.userId) ?? 1,
+    }))
   );
 
-  db.transaction(() => {
-    insertExpense.run(expenseId, groupId, title.trim(), amount, currency, paidBy, splitType);
-    for (const { userId, amount: splitAmt } of computedSplits) {
-      insertSplit.run(randomUUID(), expenseId, userId, splitAmt, sharesMap.get(userId) ?? 1);
-    }
-  })();
-
-  const expense = db.prepare("SELECT * FROM expenses WHERE id = ?").get(expenseId);
+  const expense = getExpenseById(expenseId);
   return NextResponse.json(expense, { status: 201 });
 }

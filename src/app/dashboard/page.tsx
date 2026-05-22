@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import getDb from "@/lib/db";
+import { getUserGroups } from "@/lib/repositories/groupRepository";
+import { getExpensesByUserGroups, getExpenseSplitsByUserGroups } from "@/lib/repositories/expenseRepository";
+import { getSettlementsByUserGroups } from "@/lib/repositories/settlementRepository";
 import CreateGroupForm from "./CreateGroupForm";
 import DashboardClient from "./DashboardClient";
 
@@ -21,86 +23,17 @@ export default async function DashboardPage() {
     redirect("/");
   }
 
-  const db = getDb();
-  const groups = db
-    .prepare(
-      `
-      SELECT
-        g.id,
-        g.name,
-        g.description,
-        g.invite_code,
-        g.created_by,
-        g.created_at,
-        COUNT(DISTINCT gm2.id) as member_count,
-        (SELECT COUNT(*) FROM expenses e WHERE e.group_id = g.id) as expense_count
-      FROM groups g
-      JOIN group_members gm ON g.id = gm.group_id AND gm.user_id = ?
-      LEFT JOIN group_members gm2 ON g.id = gm2.group_id
-      GROUP BY g.id
-      ORDER BY g.created_at DESC
-    `
-    )
-    .all(session.user.id) as GroupRow[];
-
   const currentUserId = session.user.id;
+  const groups = getUserGroups(currentUserId) as GroupRow[];
 
   // Fetch all expenses in the user's groups
-  const expenses = db
-    .prepare(
-      `
-      SELECT id, group_id, paid_by, amount, currency
-      FROM expenses
-      WHERE group_id IN (
-        SELECT group_id FROM group_members WHERE user_id = ?
-      )
-    `
-    )
-    .all(currentUserId) as Array<{
-      id: string;
-      group_id: string;
-      paid_by: string;
-      amount: number;
-      currency: string;
-    }>;
+  const expenses = getExpensesByUserGroups(currentUserId);
 
   // Fetch all splits for those expenses
-  const splits = db
-    .prepare(
-      `
-      SELECT es.user_id, es.amount, e.group_id, e.currency
-      FROM expense_splits es
-      JOIN expenses e ON es.expense_id = e.id
-      WHERE e.group_id IN (
-        SELECT group_id FROM group_members WHERE user_id = ?
-      )
-    `
-    )
-    .all(currentUserId) as Array<{
-      user_id: string;
-      amount: number;
-      group_id: string;
-      currency: string;
-    }>;
+  const splits = getExpenseSplitsByUserGroups(currentUserId);
 
   // Fetch all settlements in those groups
-  const settlements = db
-    .prepare(
-      `
-      SELECT group_id, from_user, to_user, amount, currency
-      FROM settlements
-      WHERE group_id IN (
-        SELECT group_id FROM group_members WHERE user_id = ?
-      )
-    `
-    )
-    .all(currentUserId) as Array<{
-      group_id: string;
-      from_user: string;
-      to_user: string;
-      amount: number;
-      currency: string;
-    }>;
+  const settlements = getSettlementsByUserGroups(currentUserId);
 
   // Compute the net balance of each user per group and currency
   const balancesByGroup: Record<string, Record<string, Record<string, number>>> = {};

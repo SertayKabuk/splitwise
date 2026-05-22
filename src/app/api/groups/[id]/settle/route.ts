@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import getDb from "@/lib/db";
+import { getGroupMembership } from "@/lib/repositories/groupRepository";
+import { createSettlement } from "@/lib/repositories/settlementRepository";
 import { randomUUID } from "crypto";
 import { CURRENCIES } from "@/lib/currencies";
 
@@ -14,13 +15,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
   const { id: groupId } = await params;
 
   // Verify requester is a group member
-  const membership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, session.user.id);
+  const membership = getGroupMembership(groupId, session.user.id);
 
   if (!membership) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -55,23 +53,24 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Validate both users are group members
-  const fromMembership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, fromUser);
+  const fromMembership = getGroupMembership(groupId, fromUser);
   if (!fromMembership) {
     return NextResponse.json({ error: "fromUser is not a group member" }, { status: 400 });
   }
 
-  const toMembership = db
-    .prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
-    .get(groupId, toUser);
+  const toMembership = getGroupMembership(groupId, toUser);
   if (!toMembership) {
     return NextResponse.json({ error: "toUser is not a group member" }, { status: 400 });
   }
 
-  db.prepare(
-    "INSERT INTO settlements (id, group_id, from_user, to_user, amount, currency) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(randomUUID(), groupId, fromUser, toUser, amount, currency);
+  createSettlement({
+    id: randomUUID(),
+    group_id: groupId,
+    from_user: fromUser,
+    to_user: toUser,
+    amount,
+    currency,
+  });
 
   return NextResponse.json({ success: true });
 }
