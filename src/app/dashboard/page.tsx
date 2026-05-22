@@ -1,12 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import getDb from "@/lib/db";
-import Link from "next/link";
 import CreateGroupForm from "./CreateGroupForm";
-import DeleteGroupButton from "./DeleteGroupButton";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Users, ClipboardList, ArrowRight } from "lucide-react";
+import DashboardClient from "./DashboardClient";
 
 interface GroupRow {
   id: string;
@@ -49,6 +45,118 @@ export default async function DashboardPage() {
 
   const currentUserId = session.user.id;
 
+  // Fetch all expenses in the user's groups
+  const expenses = db
+    .prepare(
+      `
+      SELECT id, group_id, paid_by, amount, currency
+      FROM expenses
+      WHERE group_id IN (
+        SELECT group_id FROM group_members WHERE user_id = ?
+      )
+    `
+    )
+    .all(currentUserId) as Array<{
+      id: string;
+      group_id: string;
+      paid_by: string;
+      amount: number;
+      currency: string;
+    }>;
+
+  // Fetch all splits for those expenses
+  const splits = db
+    .prepare(
+      `
+      SELECT es.user_id, es.amount, e.group_id, e.currency
+      FROM expense_splits es
+      JOIN expenses e ON es.expense_id = e.id
+      WHERE e.group_id IN (
+        SELECT group_id FROM group_members WHERE user_id = ?
+      )
+    `
+    )
+    .all(currentUserId) as Array<{
+      user_id: string;
+      amount: number;
+      group_id: string;
+      currency: string;
+    }>;
+
+  // Fetch all settlements in those groups
+  const settlements = db
+    .prepare(
+      `
+      SELECT group_id, from_user, to_user, amount, currency
+      FROM settlements
+      WHERE group_id IN (
+        SELECT group_id FROM group_members WHERE user_id = ?
+      )
+    `
+    )
+    .all(currentUserId) as Array<{
+      group_id: string;
+      from_user: string;
+      to_user: string;
+      amount: number;
+      currency: string;
+    }>;
+
+  // Compute the net balance of each user per group and currency
+  const balancesByGroup: Record<string, Record<string, Record<string, number>>> = {};
+
+  const adjustBalance = (groupId: string, currency: string, userId: string, change: number) => {
+    if (!balancesByGroup[groupId]) {
+      balancesByGroup[groupId] = {};
+    }
+    if (!balancesByGroup[groupId][currency]) {
+      balancesByGroup[groupId][currency] = {};
+    }
+    if (balancesByGroup[groupId][currency][userId] === undefined) {
+      balancesByGroup[groupId][currency][userId] = 0;
+    }
+    balancesByGroup[groupId][currency][userId] += change;
+  };
+
+  for (const exp of expenses) {
+    adjustBalance(exp.group_id, exp.currency, exp.paid_by, exp.amount);
+  }
+
+  for (const split of splits) {
+    adjustBalance(split.group_id, split.currency, split.user_id, -split.amount);
+  }
+
+  for (const set of settlements) {
+    adjustBalance(set.group_id, set.currency, set.from_user, set.amount);
+    adjustBalance(set.group_id, set.currency, set.to_user, -set.amount);
+  }
+
+  const extendedGroups = groups.map((g) => {
+    // If a group has no expenses, it is considered open (per user rules preference)
+    if (g.expense_count === 0) {
+      return { ...g, isSettled: false };
+    }
+
+    const groupBalances = balancesByGroup[g.id];
+    if (!groupBalances) {
+      return { ...g, isSettled: false };
+    }
+
+    let isSettled = true;
+    for (const currency of Object.keys(groupBalances)) {
+      const userBalances = groupBalances[currency];
+      for (const userId of Object.keys(userBalances)) {
+        if (Math.abs(userBalances[userId]) > 0.005) {
+          isSettled = false;
+          break;
+        }
+      }
+      if (!isSettled) break;
+    }
+
+    return { ...g, isSettled };
+  });
+
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
       {/* Header */}
@@ -60,65 +168,8 @@ export default async function DashboardPage() {
         <CreateGroupForm />
       </div>
 
-      {/* Groups Grid */}
-      {groups.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-muted rounded-2xl mb-4">
-            <Users className="w-8 h-8 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">No groups yet</h3>
-          <p className="text-muted-foreground max-w-sm mx-auto">
-            Create one or join via invite link to start splitting expenses with your travel companions.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {groups.map((group) => (
-            <Card key={group.id} className="flex flex-col gap-4 p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="font-semibold text-foreground text-lg leading-tight">
-                    {group.name}
-                  </h2>
-                  {group.description && (
-                    <p className="text-muted-foreground text-sm mt-1 line-clamp-2">
-                      {group.description}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 ml-3 flex-shrink-0">
-                  {group.created_by === currentUserId && (
-                    <DeleteGroupButton groupId={group.id} />
-                  )}
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <span className="text-primary font-bold text-sm">
-                      {group.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Users className="w-4 h-4" />
-                  <span>{group.member_count} member{group.member_count !== 1 ? "s" : ""}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <ClipboardList className="w-4 h-4" />
-                  <span>{group.expense_count} expense{group.expense_count !== 1 ? "s" : ""}</span>
-                </div>
-              </div>
-
-              <Button asChild className="mt-auto gap-2">
-                <Link href={`/groups/${group.id}`}>
-                  View Group
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </Button>
-            </Card>
-          ))}
-        </div>
-      )}
+      <DashboardClient initialGroups={extendedGroups} currentUserId={currentUserId} />
     </main>
   );
 }
+
