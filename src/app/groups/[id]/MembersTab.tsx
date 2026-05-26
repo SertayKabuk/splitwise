@@ -48,6 +48,7 @@ export function MembersTab({ members, group, currentUserId }: Props) {
   const [removeError, setRemoveError] = useState("");
 
   const [sponsorLoading, setSponsorLoading] = useState(false);
+  const [sponsorError, setSponsorError] = useState("");
 
   const handleAddPlaceholder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +104,7 @@ export function MembersTab({ members, group, currentUserId }: Props) {
 
   const handleSponsorChange = async (memberId: string, sponsorId: string | null) => {
     setSponsorLoading(true);
+    setSponsorError("");
     try {
       const res = await fetch(`/api/groups/${group.id}/members/${memberId}/sponsor`, {
         method: "PUT",
@@ -113,9 +115,10 @@ export function MembersTab({ members, group, currentUserId }: Props) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "Failed to update sponsor");
       }
+      setViewingMember((prev) => prev ? { ...prev, sponsored_by: sponsorId } : prev);
       router.refresh();
     } catch (err) {
-      console.error(err);
+      setSponsorError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setSponsorLoading(false);
     }
@@ -367,7 +370,7 @@ export function MembersTab({ members, group, currentUserId }: Props) {
                       <SelectContent>
                         <SelectItem value="none">No sponsor</SelectItem>
                         {members
-                          .filter((m) => m.id !== viewingMember.id && !m.sponsored_by)
+                          .filter((m) => m.id !== viewingMember.id && !m.sponsored_by && !m.is_placeholder)
                           .map((m) => (
                             <SelectItem key={m.id} value={m.id}>
                               {m.name ?? m.email}
@@ -375,6 +378,9 @@ export function MembersTab({ members, group, currentUserId }: Props) {
                           ))}
                       </SelectContent>
                     </Select>
+                    {sponsorError && (
+                      <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg mt-2">{sponsorError}</p>
+                    )}
                   </div>
                 )}
                 {viewingMember.id === currentUserId && (

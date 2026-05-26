@@ -35,8 +35,23 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Target user is not a member of this group" }, { status: 404 });
   }
 
-  const body = await req.json();
-  const { sponsorId } = body as { sponsorId: string | null };
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (typeof body !== "object" || body === null || !("sponsorId" in body)) {
+    return NextResponse.json({ error: "sponsorId is required" }, { status: 400 });
+  }
+
+  const { sponsorId } = body as { sponsorId: unknown };
+  if (sponsorId !== null && typeof sponsorId !== "string") {
+    return NextResponse.json({ error: "sponsorId must be a string or null" }, { status: 400 });
+  }
+
+  const sponsors = getSponsorsForGroup(groupId);
 
   // If setting a sponsor, verify sponsor is a member and prevent circular sponsorship
   if (sponsorId) {
@@ -47,8 +62,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     if (!sponsorMembership) {
       return NextResponse.json({ error: "Sponsor is not a member of this group" }, { status: 400 });
     }
+    // Disallow placeholder users as sponsors
+    const sponsorUser = db
+      .prepare("SELECT is_placeholder FROM users WHERE id = ?")
+      .get(sponsorId) as { is_placeholder: number } | undefined;
+    if (sponsorUser?.is_placeholder) {
+      return NextResponse.json({ error: "A placeholder member cannot be a sponsor" }, { status: 400 });
+    }
     // Prevent circular sponsorship: the sponsor must not themselves be sponsored by this user
-    const sponsors = getSponsorsForGroup(groupId);
     const sponsorEntry = sponsors.find((s) => s.user_id === sponsorId);
     if (sponsorEntry && sponsorEntry.sponsored_by === userId) {
       return NextResponse.json({ error: "Circular sponsorship is not allowed" }, { status: 400 });
@@ -56,6 +77,11 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     // Prevent chains: the sponsor must not already be sponsored by someone
     if (sponsorEntry) {
       return NextResponse.json({ error: "Cannot assign a sponsor who is already sponsored by someone else" }, { status: 400 });
+    }
+    // Prevent chains: userId must not already be sponsoring another member
+    const alreadySponsoringEntry = sponsors.find((s) => s.sponsored_by === userId);
+    if (alreadySponsoringEntry) {
+      return NextResponse.json({ error: "This member is already acting as a sponsor and cannot also be sponsored" }, { status: 400 });
     }
   }
 
