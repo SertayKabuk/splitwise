@@ -30,6 +30,7 @@ export interface GroupMemberWithUser {
   iban: string | null;
   is_placeholder: boolean;
   claim_code: string | null;
+  sponsored_by: string | null;
   joined_at: number;
 }
 
@@ -95,7 +96,7 @@ export function getGroupMembers(groupId: string): GroupMemberWithUser[] {
   const rows = db
     .prepare(
       `
-      SELECT u.id, u.name, u.email, u.image, u.iban, u.is_placeholder, u.claim_code, gm.joined_at
+      SELECT u.id, u.name, u.email, u.image, u.iban, u.is_placeholder, u.claim_code, gm.sponsored_by, gm.joined_at
       FROM group_members gm
       JOIN users u ON gm.user_id = u.id
       WHERE gm.group_id = ?
@@ -110,6 +111,7 @@ export function getGroupMembers(groupId: string): GroupMemberWithUser[] {
       iban: string | null;
       is_placeholder: number;
       claim_code: string | null;
+      sponsored_by: string | null;
       joined_at: number;
     }>;
   return rows.map((m) => ({
@@ -120,6 +122,7 @@ export function getGroupMembers(groupId: string): GroupMemberWithUser[] {
     iban: m.iban,
     is_placeholder: m.is_placeholder === 1,
     claim_code: m.claim_code,
+    sponsored_by: m.sponsored_by,
     joined_at: m.joined_at,
   }));
 }
@@ -178,6 +181,22 @@ export function getGroupByIdFromInviteCode(inviteCode: string): { id: string } |
   return db
     .prepare("SELECT id FROM groups WHERE invite_code = ?")
     .get(inviteCode) as { id: string } | undefined;
+}
+
+export function setSponsor(groupId: string, userId: string, sponsorId: string | null): void {
+  const db = getDb();
+  db.prepare(
+    "UPDATE group_members SET sponsored_by = ? WHERE group_id = ? AND user_id = ?"
+  ).run(sponsorId, groupId, userId);
+}
+
+export function getSponsorsForGroup(groupId: string): Array<{ user_id: string; sponsored_by: string }> {
+  const db = getDb();
+  return db
+    .prepare(
+      "SELECT user_id, sponsored_by FROM group_members WHERE group_id = ? AND sponsored_by IS NOT NULL"
+    )
+    .all(groupId) as Array<{ user_id: string; sponsored_by: string }>;
 }
 
 export function createGroupWithMember(

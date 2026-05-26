@@ -46,6 +46,7 @@ export default async function GroupPage({ params }: PageProps) {
     joined_at: m.joined_at,
     is_placeholder: m.is_placeholder,
     claim_code: isCreator ? m.claim_code : null,
+    sponsored_by: m.sponsored_by,
   }));
 
   // Fetch expenses with payer info and splits

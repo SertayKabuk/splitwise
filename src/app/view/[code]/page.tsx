@@ -28,7 +28,7 @@ export default async function ViewPage({ params }: PageProps) {
 
   const members = db
     .prepare(
-      `SELECT u.id, u.name, u.email, u.is_placeholder
+      `SELECT u.id, u.name, u.email, u.is_placeholder, gm.sponsored_by
        FROM group_members gm
        JOIN users u ON gm.user_id = u.id
        WHERE gm.group_id = ?`
@@ -38,6 +38,7 @@ export default async function ViewPage({ params }: PageProps) {
       name: string | null;
       email: string;
       is_placeholder: number;
+      sponsored_by: string | null;
     }>;
 
   const displayName = (id: string): string => {
@@ -95,6 +96,13 @@ export default async function ViewPage({ params }: PageProps) {
       currency: string;
     }>;
 
+  const sponsorMap = new Map<string, string>();
+  for (const m of members) {
+    if (m.sponsored_by) {
+      sponsorMap.set(m.id, m.sponsored_by);
+    }
+  }
+
   const balances = calculateBalances(
     members.map((m) => ({ id: m.id, name: m.name, email: m.email })),
     rawExpenses.map((e) => ({
@@ -104,7 +112,8 @@ export default async function ViewPage({ params }: PageProps) {
       currency: e.currency,
       splits: (splitsByExpense[e.id] ?? []).map((s) => ({ userId: s.user_id, amount: s.amount })),
     })),
-    rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency }))
+    rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency })),
+    sponsorMap.size > 0 ? sponsorMap : undefined
   );
 
   const fmt = (amount: number, currency: string) => formatAmount(amount, currency as CurrencyCode);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getGroupMembership, getGroupMembers } from "@/lib/repositories/groupRepository";
+import { getGroupMembership, getGroupMembers, getSponsorsForGroup } from "@/lib/repositories/groupRepository";
 import { getExpensesByGroupId, getExpenseSplitsByGroupId } from "@/lib/repositories/expenseRepository";
 import { getSettlementsByGroupId } from "@/lib/repositories/settlementRepository";
 import { calculateBalances } from "@/lib/balance";
@@ -57,7 +57,14 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     currency: s.currency,
   }));
 
-  const balances = calculateBalances(members, expenses, settlements);
+  // Build sponsor map
+  const sponsors = getSponsorsForGroup(groupId);
+  const sponsorMap = new Map<string, string>();
+  for (const s of sponsors) {
+    sponsorMap.set(s.user_id, s.sponsored_by);
+  }
+
+  const balances = calculateBalances(members, expenses, settlements, sponsorMap.size > 0 ? sponsorMap : undefined);
 
   return NextResponse.json(balances);
 }

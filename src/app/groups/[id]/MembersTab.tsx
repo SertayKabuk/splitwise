@@ -14,7 +14,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronRight, Copy, Check, Pencil, UserPlus, Trash2, Share2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ChevronRight, Copy, Check, Pencil, UserPlus, Trash2, Share2, Heart } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
@@ -39,6 +46,8 @@ export function MembersTab({ members, group, currentUserId }: Props) {
   const [removingPlaceholder, setRemovingPlaceholder] = useState<Member | null>(null);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [removeError, setRemoveError] = useState("");
+
+  const [sponsorLoading, setSponsorLoading] = useState(false);
 
   const handleAddPlaceholder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +98,26 @@ export function MembersTab({ members, group, currentUserId }: Props) {
       setRemoveError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setRemoveLoading(false);
+    }
+  };
+
+  const handleSponsorChange = async (memberId: string, sponsorId: string | null) => {
+    setSponsorLoading(true);
+    try {
+      const res = await fetch(`/api/groups/${group.id}/members/${memberId}/sponsor`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sponsorId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "Failed to update sponsor");
+      }
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSponsorLoading(false);
     }
   };
 
@@ -158,6 +187,12 @@ export function MembersTab({ members, group, currentUserId }: Props) {
               )}
               {member.is_placeholder && (
                 <Badge variant="outline" className="text-xs">Placeholder</Badge>
+              )}
+              {member.sponsored_by && (
+                <Badge variant="outline" className="text-xs border-pink-300 text-pink-600">
+                  <Heart className="w-3 h-3 mr-1" />
+                  Sponsored
+                </Badge>
               )}
             </div>
             {member.is_placeholder ? (
@@ -310,6 +345,37 @@ export function MembersTab({ members, group, currentUserId }: Props) {
                       <p className="text-sm text-muted-foreground">No IBAN set</p>
                     </div>
                   )
+                )}
+                {isCreator && viewingMember.id !== currentUserId && (
+                  <div className="bg-muted rounded-xl p-4">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                      Sponsor
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      A sponsor pays on behalf of this person. Their share of expenses will be charged to the sponsor instead.
+                    </p>
+                    <Select
+                      value={viewingMember.sponsored_by ?? "none"}
+                      onValueChange={(value) => {
+                        handleSponsorChange(viewingMember.id, value === "none" ? null : value);
+                      }}
+                      disabled={sponsorLoading}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="No sponsor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No sponsor</SelectItem>
+                        {members
+                          .filter((m) => m.id !== viewingMember.id)
+                          .map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.name ?? m.email}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 {viewingMember.id === currentUserId && (
                   <Button variant="outline" asChild className="w-full gap-2">
