@@ -367,7 +367,7 @@ export function MembersTab({ members, group, currentUserId }: Props) {
                       <SelectContent>
                         <SelectItem value="none">No sponsor</SelectItem>
                         {members
-                          .filter((m) => m.id !== viewingMember.id)
+                          .filter((m) => m.id !== viewingMember.id && !m.sponsored_by)
                           .map((m) => (
                             <SelectItem key={m.id} value={m.id}>
                               {m.name ?? m.email}

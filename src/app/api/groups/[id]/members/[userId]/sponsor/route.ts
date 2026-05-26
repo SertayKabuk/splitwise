@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getGroupMembership, setSponsor } from "@/lib/repositories/groupRepository";
+import { getGroupMembership, setSponsor, getSponsorsForGroup } from "@/lib/repositories/groupRepository";
 
 interface RouteParams {
   params: Promise<{ id: string; userId: string }>;
@@ -20,6 +20,15 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Only the group creator can assign sponsors
+  const db = await import("@/lib/db").then((m) => m.default());
+  const group = db
+    .prepare("SELECT created_by FROM groups WHERE id = ?")
+    .get(groupId) as { created_by: string } | undefined;
+  if (!group || group.created_by !== session.user.id) {
+    return NextResponse.json({ error: "Only the group creator can assign sponsors" }, { status: 403 });
+  }
+
   // Verify target user is a member of the group
   const targetMembership = getGroupMembership(groupId, userId);
   if (!targetMembership) {
@@ -29,7 +38,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   const body = await req.json();
   const { sponsorId } = body as { sponsorId: string | null };
 
-  // If setting a sponsor, verify sponsor is a member of the group
+  // If setting a sponsor, verify sponsor is a member and prevent circular sponsorship
   if (sponsorId) {
     if (sponsorId === userId) {
       return NextResponse.json({ error: "A member cannot sponsor themselves" }, { status: 400 });
@@ -37,6 +46,16 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     const sponsorMembership = getGroupMembership(groupId, sponsorId);
     if (!sponsorMembership) {
       return NextResponse.json({ error: "Sponsor is not a member of this group" }, { status: 400 });
+    }
+    // Prevent circular sponsorship: the sponsor must not themselves be sponsored by this user
+    const sponsors = getSponsorsForGroup(groupId);
+    const sponsorEntry = sponsors.find((s) => s.user_id === sponsorId);
+    if (sponsorEntry && sponsorEntry.sponsored_by === userId) {
+      return NextResponse.json({ error: "Circular sponsorship is not allowed" }, { status: 400 });
+    }
+    // Prevent chains: the sponsor must not already be sponsored by someone
+    if (sponsorEntry) {
+      return NextResponse.json({ error: "Cannot assign a sponsor who is already sponsored by someone else" }, { status: 400 });
     }
   }
 
