@@ -36,7 +36,8 @@ export interface Debt {
 export function calculateBalances(
   members: Member[],
   expenses: Expense[],
-  settlements: Settlement[]
+  settlements: Settlement[],
+  sponsorMap?: Map<string, string>
 ): Debt[] {
   const nameMap = new Map(members.map((m) => [m.id, m.name ?? m.email]));
 
@@ -53,7 +54,9 @@ export function calculateBalances(
     for (const expense of expenses.filter((e) => e.currency === currency)) {
       balanceMap.set(expense.paidBy, (balanceMap.get(expense.paidBy) ?? 0) + expense.amount);
       for (const split of expense.splits) {
-        balanceMap.set(split.userId, (balanceMap.get(split.userId) ?? 0) - split.amount);
+        // If the user has a sponsor, the sponsor takes on their debt
+        const effectiveUser = sponsorMap?.get(split.userId) ?? split.userId;
+        balanceMap.set(effectiveUser, (balanceMap.get(effectiveUser) ?? 0) - split.amount);
       }
     }
 

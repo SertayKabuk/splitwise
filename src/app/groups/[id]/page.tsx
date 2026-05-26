@@ -46,6 +46,7 @@ export default async function GroupPage({ params }: PageProps) {
     joined_at: m.joined_at,
     is_placeholder: m.is_placeholder,
     claim_code: isCreator ? m.claim_code : null,
+    sponsored_by: m.sponsored_by,
   }));
 
   // Fetch expenses with payer info and splits
@@ -78,6 +79,14 @@ export default async function GroupPage({ params }: PageProps) {
     settledAt: s.settled_at,
   }));
 
+  // Build sponsor map from member data
+  const sponsorMap = new Map<string, string>();
+  for (const m of rawMembers) {
+    if (m.sponsored_by) {
+      sponsorMap.set(m.id, m.sponsored_by);
+    }
+  }
+
   // Calculate balances
   const balances = calculateBalances(
     members,
@@ -88,7 +97,8 @@ export default async function GroupPage({ params }: PageProps) {
       currency: e.currency,
       splits: (splitsByExpense[e.id] ?? []).map((s) => ({ userId: s.user_id, amount: s.amount })),
     })),
-    rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency }))
+    rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency })),
+    sponsorMap.size > 0 ? sponsorMap : undefined
   );
 
   const groupForClient = {

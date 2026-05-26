@@ -7,6 +7,7 @@ export interface Member {
   joined_at: number;
   is_placeholder: boolean;
   claim_code: string | null;
+  sponsored_by: string | null;
 }
 
 export interface ExpenseSplit {

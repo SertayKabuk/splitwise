@@ -39,6 +39,7 @@ export const createTablesScript = `
       id TEXT PRIMARY KEY,
       group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sponsored_by TEXT REFERENCES users(id) ON DELETE SET NULL,
       joined_at INTEGER NOT NULL DEFAULT (unixepoch()),
       UNIQUE(group_id, user_id)
     );
@@ -103,6 +104,12 @@ function migrate(db: Database.Database) {
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS users_claim_code_unique ON users(claim_code) WHERE claim_code IS NOT NULL"
   );
+
+  const gmCols = db.prepare("PRAGMA table_info(group_members)").all() as Array<{ name: string }>;
+  const gmColNames = new Set(gmCols.map((c) => c.name));
+  if (!gmColNames.has("sponsored_by")) {
+    db.exec("ALTER TABLE group_members ADD COLUMN sponsored_by TEXT REFERENCES users(id) ON DELETE SET NULL");
+  }
 
   const groupCols = db.prepare("PRAGMA table_info(groups)").all() as Array<{ name: string }>;
   const groupColNames = new Set(groupCols.map((c) => c.name));
