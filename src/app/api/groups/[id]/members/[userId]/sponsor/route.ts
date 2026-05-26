@@ -51,8 +51,6 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "sponsorId must be a string or null" }, { status: 400 });
   }
 
-  const sponsors = getSponsorsForGroup(groupId);
-
   // If setting a sponsor, verify sponsor is a member and prevent circular sponsorship
   if (sponsorId) {
     if (sponsorId === userId) {
@@ -70,6 +68,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "A placeholder member cannot be a sponsor" }, { status: 400 });
     }
     // Prevent circular sponsorship: the sponsor must not themselves be sponsored by this user
+    const sponsors = getSponsorsForGroup(groupId);
     const sponsorEntry = sponsors.find((s) => s.user_id === sponsorId);
     if (sponsorEntry && sponsorEntry.sponsored_by === userId) {
       return NextResponse.json({ error: "Circular sponsorship is not allowed" }, { status: 400 });
