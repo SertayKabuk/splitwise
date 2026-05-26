@@ -138,13 +138,9 @@ describe("PUT /api/groups/[id]/members/[userId]/sponsor", () => {
   });
 
   it("returns 400 for circular sponsorship", async () => {
-    // u2 sponsors u1 (creator sponsors u1 with u2), then try to make u1 sponsor of u2
+    // Set u2 as u1's sponsor, then attempt the reverse (circular)
     db.prepare("UPDATE group_members SET sponsored_by = ? WHERE group_id = ? AND user_id = ?").run("u2", "g1", "u1");
     const res = await PUT(makeReq({ sponsorId: "u1" }), routeParams("u2"));
-    // u1 is already sponsored by u2, so setting u2's sponsor to u1 would be circular
-    // The check: sponsorEntry for u1 exists with sponsored_by = u2, and we want to set u2's sponsor to u1
-    // Actually the circular check is: sponsorEntry.sponsored_by === userId (u2)
-    // sponsorEntry for u1 has sponsored_by = u2, userId = u2 → circular
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toEqual({ error: "Circular sponsorship is not allowed" });
   });

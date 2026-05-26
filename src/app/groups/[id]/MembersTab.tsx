@@ -118,7 +118,7 @@ export function MembersTab({ members, group, currentUserId }: Props) {
       setViewingMember((prev) => prev ? { ...prev, sponsored_by: sponsorId } : prev);
       router.refresh();
     } catch (err) {
-      setSponsorError(err instanceof Error ? err.message : "An error occurred");
+      setSponsorError(err instanceof Error ? err.message : "Failed to update sponsor");
     } finally {
       setSponsorLoading(false);
     }
