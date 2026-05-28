@@ -56,58 +56,60 @@ export default function DashboardClient({ initialGroups, currentUserId }: Dashbo
       {/* Search and Filters Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-4 rounded-2xl border shadow-sm">
         {/* Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto p-1 bg-muted/60 rounded-xl border border-muted/80 w-fit">
-          <button
-            onClick={() => setActiveFilter("all")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-              activeFilter === "all"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            All Groups
-            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-muted-foreground/10 text-muted-foreground">
-              {totalCount}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveFilter("open")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center gap-1.5 ${
-              activeFilter === "open"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Open
-            <span className={`px-1.5 py-0.5 text-xs rounded-full ${
-              activeFilter === "open"
-                ? "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400"
-                : "bg-muted-foreground/10 text-muted-foreground"
-            }`}>
-              {openCount}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveFilter("settled")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center gap-1.5 ${
-              activeFilter === "settled"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Settled Up
-            <span className={`px-1.5 py-0.5 text-xs rounded-full ${
-              activeFilter === "settled"
-                ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
-                : "bg-muted-foreground/10 text-muted-foreground"
-            }`}>
-              {settledCount}
-            </span>
-          </button>
+        <div className="w-full min-w-0 overflow-x-auto md:flex-1">
+          <div className="flex w-max min-w-full items-center gap-1.5 rounded-xl border border-muted/80 bg-muted/60 p-1">
+            <button
+              onClick={() => setActiveFilter("all")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                activeFilter === "all"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              All Groups
+              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-muted-foreground/10 text-muted-foreground">
+                {totalCount}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveFilter("open")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center gap-1.5 ${
+                activeFilter === "open"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Open
+              <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                activeFilter === "open"
+                  ? "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400"
+                  : "bg-muted-foreground/10 text-muted-foreground"
+              }`}>
+                {openCount}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveFilter("settled")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center gap-1.5 ${
+                activeFilter === "settled"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Settled Up
+              <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                activeFilter === "settled"
+                  ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
+                  : "bg-muted-foreground/10 text-muted-foreground"
+              }`}>
+                {settledCount}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Search Input */}
-        <div className="relative w-full md:max-w-xs">
+        <div className="relative w-full md:max-w-xs md:flex-none">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
