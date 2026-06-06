@@ -127,4 +127,70 @@ describe("POST /api/groups/[id]/expenses", () => {
       { user_id: "u3", amount: 5, shares: 3 },
     ]);
   });
+
+  it("creates an exact-split expense and persists the typed amounts", async () => {
+    (randomUUID as unknown as Mock)
+      .mockReturnValueOnce("expense-1")
+      .mockReturnValueOnce("split-1")
+      .mockReturnValueOnce("split-2");
+
+    const formData = new FormData();
+    formData.append("title", "Groceries");
+    formData.append("amount", "50");
+    formData.append("currency", "USD");
+    formData.append("paidBy", "u1");
+    formData.append("splitType", "exact");
+    formData.append("splitWith", JSON.stringify([
+      { userId: "u1", shares: 1, amount: 30 },
+      { userId: "u2", shares: 1, amount: 20 },
+    ]));
+
+    const req = new NextRequest("http://localhost/api/groups/g1/expenses", {
+      method: "POST",
+      body: formData,
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: "g1" }) });
+
+    expect(res.status).toBe(201);
+
+    const expense = db.prepare("SELECT split_type FROM expenses WHERE id = ?").get("expense-1") as {
+      split_type: string;
+    };
+    expect(expense.split_type).toBe("exact");
+
+    const splits = db
+      .prepare("SELECT user_id, amount FROM expense_splits WHERE expense_id = ? ORDER BY user_id")
+      .all("expense-1") as Array<{ user_id: string; amount: number }>;
+
+    expect(splits).toEqual([
+      { user_id: "u1", amount: 30 },
+      { user_id: "u2", amount: 20 },
+    ]);
+  });
+
+  it("returns 400 when exact amounts do not add up to the total", async () => {
+    const formData = new FormData();
+    formData.append("title", "Groceries");
+    formData.append("amount", "50");
+    formData.append("currency", "USD");
+    formData.append("paidBy", "u1");
+    formData.append("splitType", "exact");
+    formData.append("splitWith", JSON.stringify([
+      { userId: "u1", shares: 1, amount: 30 },
+      { userId: "u2", shares: 1, amount: 15 },
+    ]));
+
+    const req = new NextRequest("http://localhost/api/groups/g1/expenses", {
+      method: "POST",
+      body: formData,
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: "g1" }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Exact amounts must add up to the total expense amount",
+    });
+  });
 });

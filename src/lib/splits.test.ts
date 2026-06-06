@@ -78,4 +78,39 @@ describe("computeSplits", () => {
       { userId: "u2", amount: 0 },
     ]);
   });
+
+  it("returns the exact amounts provided per participant", () => {
+    const result = computeSplits(
+      100,
+      [
+        { userId: "u1", shares: 1, amount: 70 },
+        { userId: "u2", shares: 1, amount: 25.5 },
+        { userId: "u3", shares: 1, amount: 4.5 },
+      ],
+      "exact"
+    );
+
+    expect(result).toEqual([
+      { userId: "u1", amount: 70 },
+      { userId: "u2", amount: 25.5 },
+      { userId: "u3", amount: 4.5 },
+    ]);
+    expect(result.reduce((sum, s) => Math.round((sum + s.amount) * 100) / 100, 0)).toBe(100);
+  });
+
+  it("rounds exact amounts to cents and treats missing amounts as zero", () => {
+    const result = computeSplits(
+      10,
+      [
+        { userId: "u1", shares: 1, amount: 9.999 },
+        { userId: "u2", shares: 1 },
+      ],
+      "exact"
+    );
+
+    expect(result).toEqual([
+      { userId: "u1", amount: 10 },
+      { userId: "u2", amount: 0 },
+    ]);
+  });
 });

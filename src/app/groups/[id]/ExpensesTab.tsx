@@ -36,6 +36,14 @@ import {
   Scale,
 } from "lucide-react";
 
+type SplitMode = "equal" | "shares" | "exact";
+
+/** Parse a raw exact-amount input string into a non-negative number (blank/invalid -> 0). */
+function parseExactAmount(v: string | undefined): number {
+  const n = parseFloat(v ?? "");
+  return isNaN(n) || n < 0 ? 0 : n;
+}
+
 interface Props {
   groupId: string;
   expenses: Expense[];
@@ -48,10 +56,13 @@ interface SplitMemberListProps {
   members: Member[];
   currentUserId: string;
   splitWith: string[];
-  splitType: "equal" | "shares";
+  splitType: SplitMode;
   shares: Record<string, number>;
+  exactAmounts: Record<string, string>;
+  currencySymbol: string;
   onToggle: (id: string) => void;
   onShareChange: (id: string, val: number) => void;
+  onExactChange: (id: string, val: string) => void;
 }
 
 function SplitMemberList({
@@ -60,8 +71,11 @@ function SplitMemberList({
   splitWith,
   splitType,
   shares,
+  exactAmounts,
+  currencySymbol,
   onToggle,
   onShareChange,
+  onExactChange,
 }: SplitMemberListProps) {
   return (
     <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
@@ -101,6 +115,21 @@ function SplitMemberList({
                 <span className="text-[11px] font-bold text-muted-foreground">shares</span>
               </div>
             )}
+            {splitType === "exact" && isSelected && (
+              <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[11px] font-bold text-muted-foreground">{currencySymbol}</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={exactAmounts[m.id] ?? ""}
+                  onChange={(e) => onExactChange(m.id, e.target.value)}
+                  className="w-24 text-right h-8 text-xs font-bold bg-background border-border/80 rounded-lg"
+                />
+              </div>
+            )}
           </div>
         );
       })}
@@ -110,8 +139,9 @@ function SplitMemberList({
 
 interface SplitPreviewProps {
   splitWith: string[];
-  splitType: "equal" | "shares";
+  splitType: SplitMode;
   shares: Record<string, number>;
+  exactAmounts: Record<string, string>;
   amount: string;
   currency: CurrencyCode;
   memberMap: Map<string, Member>;
@@ -123,6 +153,7 @@ function SplitPreview({
   splitWith,
   splitType,
   shares,
+  exactAmounts,
   amount,
   currency,
   memberMap,
@@ -140,6 +171,52 @@ function SplitPreview({
           {fmt(totalAmount / splitWith.length, currency)}
         </span>
       </p>
+    );
+  }
+
+  if (splitType === "exact") {
+    const totalCents = Math.round(totalAmount * 100);
+    const assignedCents = splitWith.reduce(
+      (sum, id) => sum + Math.round(parseExactAmount(exactAmounts[id]) * 100),
+      0
+    );
+    const remainingCents = totalCents - assignedCents;
+    return (
+      <div className="bg-muted rounded-lg px-3 py-2.5 space-y-2">
+        <div className="space-y-1.5">
+          {splitWith.map((id) => {
+            const m = memberMap.get(id);
+            return (
+              <div key={id} className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {id === currentUserId ? "You" : m?.name ?? m?.email}
+                </span>
+                <span className="font-semibold text-foreground">
+                  {fmt(parseExactAmount(exactAmounts[id]), currency)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-between text-xs font-bold border-t border-border/60 pt-2">
+          <span
+            className={
+              remainingCents === 0
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-amber-600 dark:text-amber-400"
+            }
+          >
+            {remainingCents === 0
+              ? "Fully assigned"
+              : remainingCents > 0
+                ? `${fmt(remainingCents / 100, currency)} left to assign`
+                : `${fmt(Math.abs(remainingCents) / 100, currency)} over`}
+          </span>
+          <span className="text-muted-foreground">
+            {fmt(assignedCents / 100, currency)} / {fmt(totalAmount, currency)}
+          </span>
+        </div>
+      </div>
     );
   }
 
@@ -262,10 +339,11 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
   const [expenseCurrency, setExpenseCurrency] = useState<CurrencyCode>("TRY");
   const [expensePaidBy, setExpensePaidBy] = useState(currentUserId);
   const [expenseSplitWith, setExpenseSplitWith] = useState<string[]>(members.map((m) => m.id));
-  const [expenseSplitType, setExpenseSplitType] = useState<"equal" | "shares">("equal");
+  const [expenseSplitType, setExpenseSplitType] = useState<SplitMode>("equal");
   const [expenseShares, setExpenseShares] = useState<Record<string, number>>(() =>
     Object.fromEntries(members.map((m) => [m.id, 1]))
   );
+  const [expenseExactAmounts, setExpenseExactAmounts] = useState<Record<string, string>>({});
   const [expenseNotes, setExpenseNotes] = useState("");
   const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
   const [addExpenseLoading, setAddExpenseLoading] = useState(false);
@@ -277,8 +355,9 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
   const [editCurrency, setEditCurrency] = useState<CurrencyCode>("TRY");
   const [editPaidBy, setEditPaidBy] = useState(currentUserId);
   const [editSplitWith, setEditSplitWith] = useState<string[]>([]);
-  const [editSplitType, setEditSplitType] = useState<"equal" | "shares">("equal");
+  const [editSplitType, setEditSplitType] = useState<SplitMode>("equal");
   const [editShares, setEditShares] = useState<Record<string, number>>({});
+  const [editExactAmounts, setEditExactAmounts] = useState<Record<string, string>>({});
   const [editNotes, setEditNotes] = useState("");
   const [editFiles, setEditFiles] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<Attachment[]>([]);
@@ -297,6 +376,28 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
       setExpenseSplitWith((prev) => [...prev, userId]);
       setExpenseShares((prev) => ({ ...prev, [userId]: prev[userId] ?? 1 }));
     }
+  };
+
+  // Clamp an exact-amount entry so the assigned total can never exceed the expense amount.
+  const handleExactChange = (
+    id: string,
+    raw: string,
+    total: number,
+    splitWith: string[],
+    current: Record<string, string>,
+    setter: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  ) => {
+    let next = raw;
+    if (raw !== "" && isFinite(total) && total > 0) {
+      const othersCents = splitWith
+        .filter((x) => x !== id)
+        .reduce((sum, x) => sum + Math.round(parseExactAmount(current[x]) * 100), 0);
+      const maxCents = Math.max(0, Math.round(total * 100) - othersCents);
+      if (Math.round(parseExactAmount(raw) * 100) > maxCents) {
+        next = (maxCents / 100).toString();
+      }
+    }
+    setter((prev) => ({ ...prev, [id]: next }));
   };
 
   const refreshData = async () => {
@@ -324,6 +425,16 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
       setAddExpenseError("Select at least one person to split with");
       return;
     }
+    if (expenseSplitType === "exact") {
+      const assignedCents = expenseSplitWith.reduce(
+        (sum, id) => sum + Math.round(parseExactAmount(expenseExactAmounts[id]) * 100),
+        0
+      );
+      if (assignedCents !== Math.round(amount * 100)) {
+        setAddExpenseError("Exact amounts must add up to the total expense amount");
+        return;
+      }
+    }
 
     setAddExpenseLoading(true);
     setAddExpenseError("");
@@ -337,7 +448,13 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
       formData.append(
         "splitWith",
         JSON.stringify(
-          expenseSplitWith.map((userId) => ({ userId, shares: expenseShares[userId] ?? 1 }))
+          expenseSplitWith.map((userId) => ({
+            userId,
+            shares: expenseShares[userId] ?? 1,
+            ...(expenseSplitType === "exact"
+              ? { amount: parseExactAmount(expenseExactAmounts[userId]) }
+              : {}),
+          }))
         )
       );
       if (expenseNotes.trim()) {
@@ -364,6 +481,7 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
       setExpenseSplitWith(members.map((m) => m.id));
       setExpenseSplitType("equal");
       setExpenseShares(Object.fromEntries(members.map((m) => [m.id, 1])));
+      setExpenseExactAmounts({});
       setExpenseNotes("");
       setExpenseFiles([]);
     } catch (err) {
@@ -380,8 +498,11 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
     setEditCurrency(expense.currency as CurrencyCode);
     setEditPaidBy(expense.paid_by);
     setEditSplitWith(expense.splits.map((s) => s.user_id));
-    setEditSplitType(expense.split_type as "equal" | "shares");
+    setEditSplitType(expense.split_type as SplitMode);
     setEditShares(Object.fromEntries(expense.splits.map((s) => [s.user_id, s.shares])));
+    setEditExactAmounts(
+      Object.fromEntries(expense.splits.map((s) => [s.user_id, String(s.amount)]))
+    );
     setEditNotes(expense.notes || "");
     setExistingAttachments(expense.attachments || []);
     setRemoveAttachmentIds([]);
@@ -405,6 +526,16 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
       setEditError("Select at least one person to split with");
       return;
     }
+    if (editSplitType === "exact") {
+      const assignedCents = editSplitWith.reduce(
+        (sum, id) => sum + Math.round(parseExactAmount(editExactAmounts[id]) * 100),
+        0
+      );
+      if (assignedCents !== Math.round(amount * 100)) {
+        setEditError("Exact amounts must add up to the total expense amount");
+        return;
+      }
+    }
 
     setEditLoading(true);
     setEditError("");
@@ -418,7 +549,13 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
       formData.append(
         "splitWith",
         JSON.stringify(
-          editSplitWith.map((userId) => ({ userId, shares: editShares[userId] ?? 1 }))
+          editSplitWith.map((userId) => ({
+            userId,
+            shares: editShares[userId] ?? 1,
+            ...(editSplitType === "exact"
+              ? { amount: parseExactAmount(editExactAmounts[userId]) }
+              : {}),
+          }))
         )
       );
       formData.append("notes", editNotes.trim());
@@ -593,6 +730,11 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                             {expense.split_type === "shares" && (
                               <span className="text-[9px] font-bold bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-md">
                                 Shares
+                              </span>
+                            )}
+                            {expense.split_type === "exact" && (
+                              <span className="text-[9px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-md">
+                                Exact
                               </span>
                             )}
 
@@ -801,6 +943,17 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                   >
                     Shares
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpenseSplitType("exact")}
+                    className={`px-3 py-1.5 border-l border-border transition-colors ${
+                      expenseSplitType === "exact"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    Exact
+                  </button>
                 </div>
               </div>
               <SplitMemberList
@@ -809,9 +962,21 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                 splitWith={expenseSplitWith}
                 splitType={expenseSplitType}
                 shares={expenseShares}
+                exactAmounts={expenseExactAmounts}
+                currencySymbol={CURRENCIES[expenseCurrency].symbol}
                 onToggle={toggleSplitMember}
                 onShareChange={(id, val) =>
                   setExpenseShares((prev) => ({ ...prev, [id]: val }))
+                }
+                onExactChange={(id, val) =>
+                  handleExactChange(
+                    id,
+                    val,
+                    parseFloat(expenseAmount),
+                    expenseSplitWith,
+                    expenseExactAmounts,
+                    setExpenseExactAmounts
+                  )
                 }
               />
             </div>
@@ -819,6 +984,7 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
               splitWith={expenseSplitWith}
               splitType={expenseSplitType}
               shares={expenseShares}
+              exactAmounts={expenseExactAmounts}
               amount={expenseAmount}
               currency={expenseCurrency}
               memberMap={memberMap}
@@ -949,6 +1115,17 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                   >
                     Shares
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditSplitType("exact")}
+                    className={`px-3 py-1.5 border-l border-border transition-colors ${
+                      editSplitType === "exact"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    Exact
+                  </button>
                 </div>
               </div>
               <SplitMemberList
@@ -957,6 +1134,8 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                 splitWith={editSplitWith}
                 splitType={editSplitType}
                 shares={editShares}
+                exactAmounts={editExactAmounts}
+                currencySymbol={CURRENCIES[editCurrency].symbol}
                 onToggle={(id) => {
                   if (editSplitWith.includes(id)) {
                     setEditSplitWith((prev) => prev.filter((x) => x !== id));
@@ -966,12 +1145,23 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                   }
                 }}
                 onShareChange={(id, val) => setEditShares((prev) => ({ ...prev, [id]: val }))}
+                onExactChange={(id, val) =>
+                  handleExactChange(
+                    id,
+                    val,
+                    parseFloat(editAmount),
+                    editSplitWith,
+                    editExactAmounts,
+                    setEditExactAmounts
+                  )
+                }
               />
             </div>
             <SplitPreview
               splitWith={editSplitWith}
               splitType={editSplitType}
               shares={editShares}
+              exactAmounts={editExactAmounts}
               amount={editAmount}
               currency={editCurrency}
               memberMap={memberMap}
@@ -1163,7 +1353,11 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground font-medium">Split type</span>
                     <span className="font-semibold text-foreground capitalize bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full text-xs">
-                      {viewingExpense.split_type === "equal" ? "Split Equally" : "Split by Shares"}
+                      {viewingExpense.split_type === "equal"
+                        ? "Split Equally"
+                        : viewingExpense.split_type === "shares"
+                          ? "Split by Shares"
+                          : "Exact Amounts"}
                     </span>
                   </div>
                 </div>

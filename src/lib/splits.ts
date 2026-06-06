@@ -1,8 +1,10 @@
-export type SplitType = "equal" | "shares";
+export type SplitType = "equal" | "shares" | "exact";
 
 export interface SplitInput {
   userId: string;
   shares: number;
+  /** Exact amount owed by this participant. Only used when splitType is "exact". */
+  amount?: number;
 }
 
 export interface SplitResult {
@@ -16,6 +18,15 @@ export function computeSplits(
   splitType: SplitType
 ): SplitResult[] {
   if (splitWith.length === 0) return [];
+
+  if (splitType === "exact") {
+    // Amounts are entered directly by the user; round each to cents and trust them.
+    // The API layer validates that they sum to the total expense amount.
+    return splitWith.map(({ userId, amount }) => ({
+      userId,
+      amount: Math.round((amount ?? 0) * 100) / 100,
+    }));
+  }
 
   if (splitType === "equal") {
     const perPerson = Math.floor((totalAmount / splitWith.length) * 100) / 100;

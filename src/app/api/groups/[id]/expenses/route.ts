@@ -107,11 +107,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!paidBy || typeof paidBy !== "string") {
     return NextResponse.json({ error: "paidBy is required" }, { status: 400 });
   }
-  if (splitType !== "equal" && splitType !== "shares") {
-    return NextResponse.json({ error: "splitType must be 'equal' or 'shares'" }, { status: 400 });
+  if (splitType !== "equal" && splitType !== "shares" && splitType !== "exact") {
+    return NextResponse.json({ error: "splitType must be 'equal', 'shares', or 'exact'" }, { status: 400 });
   }
 
-  let splitWith: { userId: string; shares: number }[];
+  let splitWith: { userId: string; shares: number; amount?: number }[];
   try {
     splitWith = splitWithStr ? JSON.parse(splitWithStr) : [];
   } catch {
@@ -124,6 +124,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   for (const { shares } of splitWith) {
     if (typeof shares !== "number" || shares < 1) {
       return NextResponse.json({ error: "Each share value must be a positive integer" }, { status: 400 });
+    }
+  }
+  if (splitType === "exact") {
+    for (const { amount: splitAmount } of splitWith) {
+      if (typeof splitAmount !== "number" || isNaN(splitAmount) || splitAmount < 0) {
+        return NextResponse.json({ error: "Each exact amount must be a non-negative number" }, { status: 400 });
+      }
+    }
+    const assignedCents = splitWith.reduce((sum, s) => sum + Math.round((s.amount ?? 0) * 100), 0);
+    if (assignedCents !== Math.round(amount * 100)) {
+      return NextResponse.json({ error: "Exact amounts must add up to the total expense amount" }, { status: 400 });
     }
   }
 

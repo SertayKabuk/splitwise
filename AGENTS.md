@@ -42,9 +42,10 @@ data/splitwise.db         # SQLite file, created on first run (gitignored)
 ### Expense Splits
 
 - `computeSplits(amount, splitWith, splitType)` in `src/lib/splits.ts` returns `{ userId, amount }[]`.
-- `split_type` (`'equal'` or `'shares'`) is stored on the `expenses` table.
+- `split_type` (`'equal'`, `'shares'`, or `'exact'`) is stored on the `expenses` table.
 - Original `shares` (integer weight per participant) are stored on `expense_splits` so the edit modal can restore them exactly.
 - Pass `sharesMap` when inserting splits to persist original share values alongside the computed `amount`.
+- For `'exact'` splits the client sends a per-participant `amount` in `splitWith`; the API verifies these sum to the expense total (compared in integer cents) before saving. The UI clamps each entry so the running total can never exceed the expense amount.
 
 ### Client State
 
