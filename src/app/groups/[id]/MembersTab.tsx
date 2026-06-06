@@ -191,12 +191,18 @@ export function MembersTab({ members, group, currentUserId }: Props) {
               {member.is_placeholder && (
                 <Badge variant="outline" className="text-xs">Placeholder</Badge>
               )}
-              {member.sponsored_by && (
-                <Badge variant="outline" className="text-xs border-pink-300 text-pink-600">
-                  <Heart className="w-3 h-3 mr-1" />
-                  Sponsored
-                </Badge>
-              )}
+              {member.sponsored_by && (() => {
+                const sponsor = members.find((m) => m.id === member.sponsored_by);
+                const sponsorName = sponsor
+                  ? (sponsor.name ?? (sponsor.is_placeholder ? "Unnamed placeholder" : sponsor.email))
+                  : "Unknown";
+                return (
+                  <Badge variant="outline" className="text-xs border-pink-300 text-pink-600">
+                    <Heart className="w-3 h-3 mr-1" />
+                    Sponsored by {sponsorName}
+                  </Badge>
+                );
+              })()}
             </div>
             {member.is_placeholder ? (
               <p className="text-sm text-muted-foreground italic">Not yet claimed</p>
@@ -271,6 +277,18 @@ export function MembersTab({ members, group, currentUserId }: Props) {
                     {viewingMember.is_placeholder && (
                       <Badge variant="outline" className="text-xs">Placeholder</Badge>
                     )}
+                    {viewingMember.sponsored_by && (() => {
+                      const sponsor = members.find((m) => m.id === viewingMember.sponsored_by);
+                      const sponsorName = sponsor
+                        ? (sponsor.name ?? (sponsor.is_placeholder ? "Unnamed placeholder" : sponsor.email))
+                        : "Unknown";
+                      return (
+                        <Badge variant="outline" className="text-xs border-pink-300 text-pink-600">
+                          <Heart className="w-3 h-3 mr-1" />
+                          Sponsored by {sponsorName}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                   {!viewingMember.is_placeholder && (
                     <p className="text-sm text-muted-foreground mt-0.5">{viewingMember.email}</p>

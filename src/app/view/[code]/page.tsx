@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import getDb from "@/lib/db";
-import { calculateBalances } from "@/lib/balance";
+import { calculateGroupBalances } from "@/lib/balance";
 import { formatAmount, type CurrencyCode } from "@/lib/currencies";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -96,25 +96,7 @@ export default async function ViewPage({ params }: PageProps) {
       currency: string;
     }>;
 
-  const sponsorMap = new Map<string, string>();
-  for (const m of members) {
-    if (m.sponsored_by) {
-      sponsorMap.set(m.id, m.sponsored_by);
-    }
-  }
-
-  const balances = calculateBalances(
-    members.map((m) => ({ id: m.id, name: m.name, email: m.email })),
-    rawExpenses.map((e) => ({
-      id: e.id,
-      paidBy: e.paid_by,
-      amount: e.amount,
-      currency: e.currency,
-      splits: (splitsByExpense[e.id] ?? []).map((s) => ({ userId: s.user_id, amount: s.amount })),
-    })),
-    rawSettlements.map((s) => ({ fromUser: s.from_user, toUser: s.to_user, amount: s.amount, currency: s.currency })),
-    sponsorMap.size > 0 ? sponsorMap : undefined
-  );
+  const balances = calculateGroupBalances(group.id);
 
   const fmt = (amount: number, currency: string) => formatAmount(amount, currency as CurrencyCode);
 

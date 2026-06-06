@@ -1,3 +1,7 @@
+import { getGroupMembers, getSponsorsForGroup } from "@/lib/repositories/groupRepository";
+import { getExpensesByGroupId, getExpenseSplitsByGroupId } from "@/lib/repositories/expenseRepository";
+import { getSettlementsByGroupId } from "@/lib/repositories/settlementRepository";
+
 export interface Member {
   id: string;
   name: string | null;
@@ -104,3 +108,42 @@ export function calculateBalances(
 
   return allDebts;
 }
+
+export function calculateGroupBalances(groupId: string): Debt[] {
+  const members = getGroupMembers(groupId);
+  const rawExpenses = getExpensesByGroupId(groupId);
+  const rawSplits = getExpenseSplitsByGroupId(groupId);
+  const rawSettlements = getSettlementsByGroupId(groupId);
+  const sponsors = getSponsorsForGroup(groupId);
+
+  const splitsByExpense: Record<string, Array<{ userId: string; amount: number }>> = {};
+  for (const split of rawSplits) {
+    if (!splitsByExpense[split.expense_id]) {
+      splitsByExpense[split.expense_id] = [];
+    }
+    splitsByExpense[split.expense_id].push({ userId: split.user_id, amount: split.amount });
+  }
+
+  const expenses = rawExpenses.map((e) => ({
+    id: e.id,
+    paidBy: e.paid_by,
+    amount: e.amount,
+    currency: e.currency,
+    splits: splitsByExpense[e.id] ?? [],
+  }));
+
+  const settlements = rawSettlements.map((s) => ({
+    fromUser: s.from_user,
+    toUser: s.to_user,
+    amount: s.amount,
+    currency: s.currency,
+  }));
+
+  const sponsorMap = new Map<string, string>();
+  for (const s of sponsors) {
+    sponsorMap.set(s.user_id, s.sponsored_by);
+  }
+
+  return calculateBalances(members, expenses, settlements, sponsorMap.size > 0 ? sponsorMap : undefined);
+}
+
