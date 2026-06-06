@@ -33,6 +33,7 @@ import {
   X,
   FileUp,
   Paperclip,
+  Scale,
 } from "lucide-react";
 
 interface Props {
@@ -63,13 +64,17 @@ function SplitMemberList({
   onShareChange,
 }: SplitMemberListProps) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
       {members.map((m) => {
         const isSelected = splitWith.includes(m.id);
         return (
           <div
             key={m.id}
-            className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-accent cursor-pointer"
+            className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all duration-200 select-none ${
+              isSelected
+                ? "bg-primary/5 border-primary/30 shadow-sm"
+                : "bg-card border-border/60 hover:bg-muted/40 hover:border-border"
+            }`}
             onClick={() => onToggle(m.id)}
           >
             <input
@@ -77,23 +82,23 @@ function SplitMemberList({
               checked={isSelected}
               onChange={() => onToggle(m.id)}
               onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 accent-primary rounded border-border"
+              className="w-4 h-4 accent-primary rounded-md border-border cursor-pointer"
             />
             <Avatar member={m} size="sm" />
-            <span className="text-sm text-foreground flex-1">
+            <span className={`text-sm flex-1 truncate ${isSelected ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
               {m.id === currentUserId ? "You" : m.name ?? m.email}
             </span>
             {splitType === "shares" && isSelected && (
-              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                 <Input
                   type="number"
                   min={1}
                   step={1}
                   value={shares[m.id] ?? 1}
                   onChange={(e) => onShareChange(m.id, Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-14 text-center h-8 text-sm"
+                  className="w-14 text-center h-8 text-xs font-bold bg-background border-border/80 rounded-lg"
                 />
-                <span className="text-xs text-muted-foreground">shares</span>
+                <span className="text-[11px] font-bold text-muted-foreground">shares</span>
               </div>
             )}
           </div>
@@ -459,104 +464,241 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
     }
   };
 
+  // Group expenses by Month & Year (sorted reverse chronologically by created_at)
+  const groupExpensesByMonth = (expensesList: Expense[]) => {
+    const groups: { monthYear: string; items: Expense[] }[] = [];
+    
+    // Sort reverse chronologically
+    const sorted = [...expensesList].sort((a, b) => b.created_at - a.created_at);
+    
+    sorted.forEach((expense) => {
+      const date = new Date(expense.created_at * 1000);
+      const key = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      
+      let group = groups.find((g) => g.monthYear === key);
+      if (!group) {
+        group = { monthYear: key, items: [] };
+        groups.push(group);
+      }
+      group.items.push(expense);
+    });
+    
+    return groups;
+  };
+
+  const expenseGroups = groupExpensesByMonth(expenses);
+
   return (
     <div>
       <div className="flex justify-end mb-4">
-        <Button onClick={() => setShowAddExpense(true)} className="gap-2 w-full sm:w-auto">
+        <Button onClick={() => setShowAddExpense(true)} className="gap-2 w-full sm:w-auto shadow-sm bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/95 hover:to-indigo-600/95 text-primary-foreground font-semibold rounded-xl">
           <Plus className="w-4 h-4" />
           Add Expense
         </Button>
       </div>
 
       {expenses.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <ClipboardList className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-          <p className="font-medium">No expenses yet</p>
-          <p className="text-sm mt-1">Add the first expense for this group</p>
+        <div className="text-center py-20 text-muted-foreground bg-muted/20 border border-dashed border-border rounded-3xl p-8 max-w-md mx-auto">
+          <ClipboardList className="w-14 h-14 mx-auto text-muted-foreground/30 mb-4" />
+          <p className="font-extrabold text-foreground text-lg">No expenses yet</p>
+          <p className="text-sm mt-1.5 text-muted-foreground max-w-[280px] mx-auto">Add the first expense to start splitting costs with the group</p>
+          <Button onClick={() => setShowAddExpense(true)} className="mt-5 gap-2 font-semibold rounded-xl">
+            <Plus className="w-4 h-4" />
+            Add First Expense
+          </Button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {expenses.map((expense) => (
-            <div
-              key={expense.id}
-              className="bg-card rounded-xl border border-border p-4 flex items-start justify-between gap-4"
-            >
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-foreground flex items-center gap-1.5">
-                  {expense.title}
-                  {(expense.attachments?.length ?? 0) > 0 && (
-                    <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
-                  )}
-                </h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Paid by{" "}
-                  <span className="font-medium text-foreground">
-                    {expense.paid_by === currentUserId
-                      ? "You"
-                      : expense.payer_name ?? expense.payer_email}
-                  </span>
-                </p>
-                {expense.splits.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Split with:{" "}
-                    {expense.splits
-                      .map((s) => (s.user_id === currentUserId ? "You" : s.name ?? s.email))
-                      .join(", ")}
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  {new Date(expense.created_at * 1000).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0 flex flex-col items-end gap-2">
-                <p className="text-lg font-bold text-emerald-500">
-                  {fmt(expense.amount, expense.currency)}
-                </p>
-                {(() => {
+        <div className="space-y-6">
+          {expenseGroups.map((group) => (
+            <div key={group.monthYear} className="space-y-3">
+              <h3 className="text-xs font-bold text-muted-foreground tracking-wider uppercase flex items-center gap-3 px-1.5">
+                <span className="bg-muted/60 dark:bg-muted/20 border border-border/40 px-3 py-1 rounded-full text-[10px] font-extrabold text-muted-foreground">
+                  {group.monthYear}
+                </span>
+                <span className="flex-1 h-px bg-border/40"></span>
+              </h3>
+              
+              <div className="space-y-3.5">
+                {group.items.map((expense) => {
+                  const date = new Date(expense.created_at * 1000);
+                  const monthShort = date.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+                  const day = date.toLocaleDateString("en-US", { day: "2-digit" });
+                  
+                  const payer = memberMap.get(expense.paid_by);
                   const mySplit = expense.splits.find((s) => s.user_id === currentUserId);
-                  return mySplit ? (
-                    <p className="text-xs text-muted-foreground">
-                      Your share: {fmt(mySplit.amount, expense.currency)}
-                    </p>
-                  ) : null;
-                })()}
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-primary"
-                    onClick={() => setViewingExpense(expense)}
-                    title="View details"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </Button>
-                  {expense.paid_by === currentUserId && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                        onClick={() => openEdit(expense)}
-                        title="Edit expense"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeletingExpense(expense)}
-                        title="Delete expense"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </>
-                  )}
-                </div>
+                  const totalAmount = expense.amount;
+                  const isPayer = expense.paid_by === currentUserId;
+
+                  // Balance outcome details
+                  let balanceText = "";
+                  let balanceAmount = 0;
+                  let balanceColorClass = ""; // For style classes
+                  let isSelfPaid = false;
+                  let isNotInvolved = false;
+
+                  if (isPayer) {
+                    const mySplitAmount = mySplit ? mySplit.amount : 0;
+                    const lentAmount = totalAmount - mySplitAmount;
+                    if (lentAmount > 0) {
+                      balanceText = "You lent";
+                      balanceAmount = lentAmount;
+                      balanceColorClass = "text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/25";
+                    } else {
+                      isSelfPaid = true;
+                      balanceText = "Self-expense";
+                      balanceColorClass = "text-muted-foreground bg-muted/50 border-border/40";
+                    }
+                  } else {
+                    if (mySplit) {
+                      balanceText = "You owe";
+                      balanceAmount = mySplit.amount;
+                      balanceColorClass = "text-rose-600 dark:text-rose-400 bg-rose-500/5 dark:bg-rose-500/10 border-rose-500/25";
+                    } else {
+                      isNotInvolved = true;
+                      balanceText = "Not involved";
+                      balanceColorClass = "text-muted-foreground bg-muted/50 border-border/40";
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={expense.id}
+                      onClick={() => setViewingExpense(expense)}
+                      className="bg-card rounded-2xl border border-border/70 hover:border-primary/30 hover:shadow-md active:scale-[0.99] cursor-pointer p-4 flex items-center justify-between gap-4 transition-all duration-300 group/card relative overflow-hidden"
+                    >
+                      {/* Left: Date & Core Details */}
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                        {/* Calendar block date badge */}
+                        <div className="flex flex-col items-center justify-center bg-muted/40 text-muted-foreground w-12 h-14 rounded-xl border border-border/60 shadow-sm shrink-0 transition-colors group-hover/card:bg-muted/60">
+                          <span className="text-[10px] font-bold tracking-wider text-muted-foreground/80 uppercase leading-none">{monthShort}</span>
+                          <span className="text-lg font-extrabold text-foreground leading-none mt-1">{day}</span>
+                        </div>
+
+                        {/* Text info */}
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-foreground text-sm sm:text-base tracking-tight truncate group-hover/card:text-primary transition-colors pr-2">
+                            {expense.title}
+                          </h4>
+                          
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            {/* Payer Pill */}
+                            <div className="flex items-center gap-1.5 bg-muted/40 hover:bg-muted/60 px-2 py-0.5 rounded-full border border-border/40 transition-colors shrink-0 max-w-[140px] truncate">
+                              {payer && <Avatar member={payer} size="sm" />}
+                              <span className="text-[10px] font-semibold text-foreground truncate">
+                                {isPayer ? "You" : payer?.name ?? payer?.email}
+                              </span>
+                            </div>
+                            
+                            {/* Split Type Badge if shares */}
+                            {expense.split_type === "shares" && (
+                              <span className="text-[9px] font-bold bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-md">
+                                Shares
+                              </span>
+                            )}
+
+                            {/* Attachments indicator */}
+                            {(expense.attachments?.length ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-sky-500/10 border border-sky-500/20 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded-md">
+                                <Paperclip className="w-2.5 h-2.5" />
+                                {expense.attachments.length}
+                              </span>
+                            )}
+
+                            {/* Notes indicator */}
+                            {expense.notes && (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md max-w-[100px] truncate" title={expense.notes}>
+                                <FileText className="w-2.5 h-2.5 shrink-0" />
+                                <span className="truncate">{expense.notes}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Middle: Splits Avatar Stack (hidden on tiny screens, flex on desktop) */}
+                      {expense.splits.length > 0 && (
+                        <div className="hidden sm:flex items-center gap-1.5 shrink-0 px-2">
+                          <div className="flex -space-x-2 overflow-hidden">
+                            {expense.splits.slice(0, 4).map((s) => {
+                              const m = memberMap.get(s.user_id);
+                              if (!m) return null;
+                              return (
+                                <div
+                                  key={s.user_id}
+                                  className="inline-block rounded-full ring-2 ring-card overflow-hidden shrink-0"
+                                  title={s.user_id === currentUserId ? "You" : m.name ?? m.email}
+                                >
+                                  <Avatar member={m} size="sm" />
+                                </div>
+                              );
+                            })}
+                            {expense.splits.length > 4 && (
+                              <div className="w-7 h-7 rounded-full bg-muted border border-border flex items-center justify-center text-[10px] font-bold text-muted-foreground ring-2 ring-card shrink-0">
+                                +{expense.splits.length - 4}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Right: Amounts and Actions */}
+                      <div className="text-right shrink-0 flex items-center gap-2.5">
+                        <div className="flex flex-col items-end justify-center min-w-[95px]">
+                          {/* Paid by label & amount */}
+                          <div className="text-[10px] font-semibold text-muted-foreground mb-0.5">
+                            {isPayer ? "You paid" : `${payer?.name?.split(" ")[0] ?? payer?.email.split("@")[0]} paid`}
+                          </div>
+                          <div className="text-base font-extrabold text-foreground leading-none">
+                            {fmt(totalAmount, expense.currency)}
+                          </div>
+
+                          {/* Share pill */}
+                          <div className={`mt-1.5 px-2 py-0.5 border rounded-md text-[9px] font-extrabold tracking-wide leading-none ${balanceColorClass}`}>
+                            {balanceText} {balanceAmount > 0 && fmt(balanceAmount, expense.currency)}
+                          </div>
+                        </div>
+
+                        {/* Actions overlay */}
+                        <div 
+                          className="flex items-center"
+                          onClick={(e) => e.stopPropagation()} // Prevent modal trigger when clicking buttons
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-muted/50 transition-colors shrink-0 hidden sm:flex"
+                            onClick={() => setViewingExpense(expense)}
+                            title="View details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {isPayer && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-muted/50 transition-colors shrink-0"
+                                onClick={() => openEdit(expense)}
+                                title="Edit expense"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                                onClick={() => setDeletingExpense(expense)}
+                                title="Delete expense"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -966,65 +1108,89 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
 
       {/* View Expense Details Modal */}
       <Dialog open={!!viewingExpense} onOpenChange={(open) => !open && setViewingExpense(null)}>
-        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="pr-6">{viewingExpense?.title}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0 gap-0 border-none rounded-3xl overflow-hidden shadow-2xl">
           {viewingExpense && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Total</span>
-                <span className="text-xl font-bold text-emerald-500">
-                  {fmt(viewingExpense.amount, viewingExpense.currency)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Paid by</span>
-                <span className="text-sm font-medium text-foreground">
-                  {viewingExpense.paid_by === currentUserId
-                    ? "You"
-                    : viewingExpense.payer_name ?? viewingExpense.payer_email}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Split type</span>
-                <span className="text-sm font-medium text-foreground capitalize">
-                  {viewingExpense.split_type}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Date</span>
-                <span className="text-sm text-foreground">
-                  {new Date(viewingExpense.created_at * 1000).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </span>
-              </div>
-
-              {viewingExpense.notes && (
-                <>
-                  <Separator />
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Notes
-                    </p>
-                    <p className="text-sm text-foreground bg-accent/30 p-2.5 rounded-xl border border-border italic whitespace-pre-wrap">
-                      {viewingExpense.notes}
-                    </p>
+            <div className="relative">
+              {/* Receipt Visual Top Stripe */}
+              <div className="h-2.5 bg-gradient-to-r from-primary via-indigo-500 to-emerald-500 w-full" />
+              
+              <div className="p-6 space-y-6">
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-2 shadow-sm border border-primary/10">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </div>
-                </>
-              )}
+                  <h3 className="font-extrabold text-xl text-foreground leading-snug px-4">
+                    {viewingExpense.title}
+                  </h3>
+                  <div className="text-3xl font-black text-emerald-500 tracking-tight mt-1">
+                    {fmt(viewingExpense.amount, viewingExpense.currency)}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Added on {new Date(viewingExpense.created_at * 1000).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    })}
+                  </p>
+                </div>
 
-              {viewingExpense.attachments && viewingExpense.attachments.length > 0 && (
-                <>
-                  <Separator />
+                <div className="border-t border-b border-dashed border-border py-4 space-y-3.5">
+                  {/* Paid By info */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground font-medium">Paid by</span>
+                    <div className="flex items-center gap-1.5 bg-muted/60 px-2.5 py-1 rounded-full border border-border/50">
+                      {(() => {
+                        const payer = memberMap.get(viewingExpense.paid_by);
+                        return (
+                          <>
+                            {payer && <Avatar member={payer} size="sm" />}
+                            <span className="font-semibold text-foreground text-xs">
+                              {viewingExpense.paid_by === currentUserId
+                                ? "You"
+                                : payer?.name ?? payer?.email}
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Split Type info */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground font-medium">Split type</span>
+                    <span className="font-semibold text-foreground capitalize bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full text-xs">
+                      {viewingExpense.split_type === "equal" ? "Split Equally" : "Split by Shares"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Notes block */}
+                {viewingExpense.notes && (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Attachments
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <h5 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5" /> Notes
+                    </h5>
+                    <div className="bg-amber-500/5 dark:bg-amber-500/10 p-3.5 rounded-2xl border border-amber-500/20 shadow-sm relative overflow-hidden">
+                      {/* Stylized note effect */}
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500/30" />
+                      <p className="text-sm text-foreground italic whitespace-pre-wrap pl-2 leading-relaxed">
+                        {viewingExpense.notes}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Attachments block */}
+                {viewingExpense.attachments && viewingExpense.attachments.length > 0 && (
+                  <div className="space-y-2">
+                    <h5 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <Paperclip className="w-3.5 h-3.5" /> Attachments ({viewingExpense.attachments.length})
+                    </h5>
+                    <div className="grid grid-cols-2 gap-2.5">
                       {viewingExpense.attachments.map((att) => {
                         const isImage = att.mime_type.startsWith("image/");
                         const fileUrl = `/api/groups/${groupId}/attachments/${att.id}`;
@@ -1034,27 +1200,27 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                             href={fileUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-card hover:bg-accent/40 hover:border-accent-foreground/20 transition-all text-xs font-medium truncate group"
+                            className="flex items-center gap-2 p-2 rounded-xl border border-border bg-muted/30 hover:bg-muted/70 hover:border-primary/20 hover:shadow-sm transition-all text-xs font-semibold group/att"
                           >
                             {isImage ? (
-                              <div className="w-8 h-8 rounded bg-muted flex-shrink-0 overflow-hidden relative border border-border">
+                              <div className="w-9 h-9 rounded-lg bg-card flex-shrink-0 overflow-hidden relative border border-border">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={fileUrl}
                                   alt={att.original_name}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  className="w-full h-full object-cover group-hover/att:scale-105 transition-transform"
                                 />
                               </div>
                             ) : (
-                              <div className="w-8 h-8 rounded bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                              <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 border border-primary/5">
                                 <FileText className="w-4 h-4" />
                               </div>
                             )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-foreground truncate" title={att.original_name}>
+                            <div className="flex-1 min-w-0 ml-1">
+                              <p className="text-foreground truncate font-medium" title={att.original_name}>
                                 {att.original_name}
                               </p>
-                              <p className="text-[10px] text-muted-foreground">
+                              <p className="text-[9px] text-muted-foreground mt-0.5">
                                 {(att.size / 1024).toFixed(1)} KB
                               </p>
                             </div>
@@ -1063,60 +1229,79 @@ export function ExpensesTab({ groupId, expenses, members, currentUserId, onRefre
                       })}
                     </div>
                   </div>
-                </>
-              )}
+                )}
 
-              {viewingExpense.splits.length > 0 && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                      Split breakdown
-                    </p>
-                    <div className="space-y-1.5">
-                      {viewingExpense.splits.map((s) => (
-                        <div key={s.user_id} className="flex items-center justify-between text-sm">
-                          <span className="text-foreground">
-                            {s.user_id === currentUserId ? "You" : s.name ?? s.email}
-                            {viewingExpense.split_type === "shares" && (
-                              <span className="text-muted-foreground ml-1 font-normal">
-                                ({s.shares} share{s.shares !== 1 ? "s" : ""})
-                              </span>
-                            )}
-                          </span>
-                          <span className="font-semibold text-foreground">
-                            {fmt(s.amount, viewingExpense.currency)}
-                          </span>
-                        </div>
-                      ))}
+                {/* Split Breakdown with Progress Bars */}
+                {viewingExpense.splits.length > 0 && (
+                  <div className="space-y-3">
+                    <h5 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Split Breakdown
+                    </h5>
+                    <div className="space-y-3 bg-muted/20 p-4 rounded-2xl border border-border/50">
+                      {(() => {
+                        const maxSplitAmount = Math.max(...viewingExpense.splits.map(s => s.amount), 1);
+                        return viewingExpense.splits.map((s) => {
+                          const m = memberMap.get(s.user_id);
+                          const percentage = (s.amount / maxSplitAmount) * 100;
+                          return (
+                            <div key={s.user_id} className="space-y-1">
+                              <div className="flex items-center justify-between text-xs font-semibold">
+                                <div className="flex items-center gap-2">
+                                  {m && <Avatar member={m} size="sm" />}
+                                  <span className="text-foreground">
+                                    {s.user_id === currentUserId ? "You" : s.name ?? s.email}
+                                    {viewingExpense.split_type === "shares" && (
+                                      <span className="text-muted-foreground/70 ml-1 text-[10px] font-normal">
+                                        ({s.shares} share{s.shares !== 1 ? "s" : ""})
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <span className="font-bold text-foreground">
+                                  {fmt(s.amount, viewingExpense.currency)}
+                                </span>
+                              </div>
+                              {/* Custom split progress bar */}
+                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-primary/70 rounded-full transition-all duration-500" 
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
-                </>
-              )}
-              {viewingExpense.paid_by === currentUserId && (
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setViewingExpense(null);
-                      openEdit(viewingExpense);
-                    }}
-                    className="flex-1"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      setViewingExpense(null);
-                      setDeletingExpense(viewingExpense);
-                    }}
-                    className="flex-1"
-                  >
-                    Delete
-                  </Button>
-                </div>
-              )}
+                )}
+
+                {/* Actions at bottom */}
+                {viewingExpense.paid_by === currentUserId && (
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setViewingExpense(null);
+                        openEdit(viewingExpense);
+                      }}
+                      className="flex-1 rounded-xl h-10 font-bold border-border/80 hover:bg-muted"
+                    >
+                      <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        setViewingExpense(null);
+                        setDeletingExpense(viewingExpense);
+                      }}
+                      className="flex-1 rounded-xl h-10 font-bold"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1.5" /> Delete
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
