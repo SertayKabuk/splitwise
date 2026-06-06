@@ -9,6 +9,7 @@ export interface DbExpense {
   currency: string;
   paid_by: string;
   split_type: string;
+  notes: string | null;
   created_at: number;
 }
 
@@ -43,6 +44,7 @@ export function getExpensesByGroupId(groupId: string): ExpenseWithPayer[] {
         e.currency,
         e.paid_by,
         e.split_type,
+        e.notes,
         e.created_at,
         u.name as payer_name,
         u.email as payer_email
@@ -126,7 +128,7 @@ export function getExpenseSplitsByUserGroups(
 export function getExpenseById(expenseId: string): DbExpense | undefined {
   const db = getDb();
   return db
-    .prepare("SELECT id, group_id, title, amount, currency, paid_by, split_type, created_at FROM expenses WHERE id = ?")
+    .prepare("SELECT id, group_id, title, amount, currency, paid_by, split_type, notes, created_at FROM expenses WHERE id = ?")
     .get(expenseId) as DbExpense | undefined;
 }
 
@@ -149,13 +151,15 @@ export function createExpense(
     currency: string;
     paid_by: string;
     split_type: string;
+    notes: string | null;
   },
-  splits: Array<{ user_id: string; amount: number; shares: number }>
+  splits: Array<{ user_id: string; amount: number; shares: number }>,
+  attachments?: Array<{ id: string; file_path: string; original_name: string; mime_type: string; size: number }>
 ): void {
   const db = getDb();
   db.transaction(() => {
     db.prepare(
-      "INSERT INTO expenses (id, group_id, title, amount, currency, paid_by, split_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO expenses (id, group_id, title, amount, currency, paid_by, split_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       expense.id,
       expense.group_id,
@@ -163,7 +167,8 @@ export function createExpense(
       expense.amount,
       expense.currency,
       expense.paid_by,
-      expense.split_type
+      expense.split_type,
+      expense.notes
     );
 
     const insertSplit = db.prepare(
@@ -171,6 +176,15 @@ export function createExpense(
     );
     for (const split of splits) {
       insertSplit.run(randomUUID(), expense.id, split.user_id, split.amount, split.shares);
+    }
+
+    if (attachments && attachments.length > 0) {
+      const insertAttachment = db.prepare(
+        "INSERT INTO expense_attachments (id, expense_id, file_path, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      for (const att of attachments) {
+        insertAttachment.run(att.id, expense.id, att.file_path, att.original_name, att.mime_type, att.size);
+      }
     }
   })();
 }
@@ -183,19 +197,23 @@ export function updateExpense(
     currency: string;
     paid_by: string;
     split_type: string;
+    notes: string | null;
   },
-  splits: Array<{ user_id: string; amount: number; shares: number }>
+  splits: Array<{ user_id: string; amount: number; shares: number }>,
+  attachmentsToCreate?: Array<{ id: string; file_path: string; original_name: string; mime_type: string; size: number }>,
+  attachmentIdsToRemove?: string[]
 ): void {
   const db = getDb();
   db.transaction(() => {
     db.prepare(
-      "UPDATE expenses SET title = ?, amount = ?, currency = ?, paid_by = ?, split_type = ? WHERE id = ?"
+      "UPDATE expenses SET title = ?, amount = ?, currency = ?, paid_by = ?, split_type = ?, notes = ? WHERE id = ?"
     ).run(
       expense.title,
       expense.amount,
       expense.currency,
       expense.paid_by,
       expense.split_type,
+      expense.notes,
       expenseId
     );
 
@@ -207,6 +225,22 @@ export function updateExpense(
     for (const split of splits) {
       insertSplit.run(randomUUID(), expenseId, split.user_id, split.amount, split.shares);
     }
+
+    if (attachmentIdsToRemove && attachmentIdsToRemove.length > 0) {
+      const deleteAttachment = db.prepare("DELETE FROM expense_attachments WHERE id = ?");
+      for (const id of attachmentIdsToRemove) {
+        deleteAttachment.run(id);
+      }
+    }
+
+    if (attachmentsToCreate && attachmentsToCreate.length > 0) {
+      const insertAttachment = db.prepare(
+        "INSERT INTO expense_attachments (id, expense_id, file_path, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      for (const att of attachmentsToCreate) {
+        insertAttachment.run(att.id, expenseId, att.file_path, att.original_name, att.mime_type, att.size);
+      }
+    }
   })();
 }
 
@@ -216,4 +250,75 @@ export function deleteExpense(expenseId: string): void {
     db.prepare("DELETE FROM expense_splits WHERE expense_id = ?").run(expenseId);
     db.prepare("DELETE FROM expenses WHERE id = ?").run(expenseId);
   })();
+}
+
+export interface DbExpenseAttachment {
+  id: string;
+  expense_id: string;
+  file_path: string;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  created_at: number;
+}
+
+export function getAttachmentsByGroupId(groupId: string): DbExpenseAttachment[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `
+      SELECT
+        a.id,
+        a.expense_id,
+        a.file_path,
+        a.original_name,
+        a.mime_type,
+        a.size,
+        a.created_at
+      FROM expense_attachments a
+      JOIN expenses e ON a.expense_id = e.id
+      WHERE e.group_id = ?
+      `
+    )
+    .all(groupId) as DbExpenseAttachment[];
+}
+
+export function getAttachmentsByExpenseId(expenseId: string): DbExpenseAttachment[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `
+      SELECT
+        id,
+        expense_id,
+        file_path,
+        original_name,
+        mime_type,
+        size,
+        created_at
+      FROM expense_attachments
+      WHERE expense_id = ?
+      `
+    )
+    .all(expenseId) as DbExpenseAttachment[];
+}
+
+export function getAttachmentById(attachmentId: string): DbExpenseAttachment | undefined {
+  const db = getDb();
+  return db
+    .prepare(
+      `
+      SELECT
+        id,
+        expense_id,
+        file_path,
+        original_name,
+        mime_type,
+        size,
+        created_at
+      FROM expense_attachments
+      WHERE id = ?
+      `
+    )
+    .get(attachmentId) as DbExpenseAttachment | undefined;
 }

@@ -26,8 +26,8 @@ describe("PUT/DELETE /api/groups/[id]/expenses/[expenseId]", () => {
     seedBasicGroup(db);
 
     db.prepare(
-      "INSERT INTO expenses (id, group_id, title, amount, currency, paid_by, split_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run("e1", "g1", "Initial", 90, "TRY", "u1", "equal");
+      "INSERT INTO expenses (id, group_id, title, amount, currency, paid_by, split_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run("e1", "g1", "Initial", 90, "TRY", "u1", "equal", null);
 
     db.prepare("INSERT INTO expense_splits (id, expense_id, user_id, amount, shares) VALUES (?, ?, ?, ?, ?)").run(
       "s1",
@@ -62,20 +62,20 @@ describe("PUT/DELETE /api/groups/[id]/expenses/[expenseId]", () => {
   it("forbids editing by non-payer", async () => {
     (auth as unknown as Mock).mockResolvedValue({ user: { id: "u2" } });
 
+    const formData = new FormData();
+    formData.append("title", "Edited");
+    formData.append("amount", "100");
+    formData.append("currency", "USD");
+    formData.append("paidBy", "u2");
+    formData.append("splitType", "equal");
+    formData.append("splitWith", JSON.stringify([
+      { userId: "u1", shares: 1 },
+      { userId: "u2", shares: 1 },
+    ]));
+
     const req = new NextRequest("http://localhost/api/groups/g1/expenses/e1", {
       method: "PUT",
-      body: JSON.stringify({
-        title: "Edited",
-        amount: 100,
-        currency: "USD",
-        paidBy: "u2",
-        splitType: "equal",
-        splitWith: [
-          { userId: "u1", shares: 1 },
-          { userId: "u2", shares: 1 },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
+      body: formData,
     });
 
     const res = await PUT(req, { params: Promise.resolve({ id: "g1", expenseId: "e1" }) });
@@ -87,21 +87,22 @@ describe("PUT/DELETE /api/groups/[id]/expenses/[expenseId]", () => {
   it("updates expense and rewrites splits", async () => {
     (randomUUID as unknown as Mock).mockReturnValueOnce("ns1").mockReturnValueOnce("ns2").mockReturnValueOnce("ns3");
 
+    const formData = new FormData();
+    formData.append("title", "Edited");
+    formData.append("amount", "10");
+    formData.append("currency", "EUR");
+    formData.append("paidBy", "u1");
+    formData.append("splitType", "shares");
+    formData.append("splitWith", JSON.stringify([
+      { userId: "u1", shares: 1 },
+      { userId: "u2", shares: 2 },
+      { userId: "u3", shares: 3 },
+    ]));
+    formData.append("notes", "Updated note");
+
     const req = new NextRequest("http://localhost/api/groups/g1/expenses/e1", {
       method: "PUT",
-      body: JSON.stringify({
-        title: "Edited",
-        amount: 10,
-        currency: "EUR",
-        paidBy: "u1",
-        splitType: "shares",
-        splitWith: [
-          { userId: "u1", shares: 1 },
-          { userId: "u2", shares: 2 },
-          { userId: "u3", shares: 3 },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
+      body: formData,
     });
 
     const res = await PUT(req, { params: Promise.resolve({ id: "g1", expenseId: "e1" }) });
@@ -109,13 +110,14 @@ describe("PUT/DELETE /api/groups/[id]/expenses/[expenseId]", () => {
     expect(res.status).toBe(200);
 
     const updated = db
-      .prepare("SELECT title, amount, currency, paid_by, split_type FROM expenses WHERE id = ?")
+      .prepare("SELECT title, amount, currency, paid_by, split_type, notes FROM expenses WHERE id = ?")
       .get("e1") as {
       title: string;
       amount: number;
       currency: string;
       paid_by: string;
       split_type: string;
+      notes: string | null;
     };
 
     expect(updated).toEqual({
@@ -124,6 +126,7 @@ describe("PUT/DELETE /api/groups/[id]/expenses/[expenseId]", () => {
       currency: "EUR",
       paid_by: "u1",
       split_type: "shares",
+      notes: "Updated note",
     });
 
     const splits = db

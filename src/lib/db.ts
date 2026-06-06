@@ -52,6 +52,7 @@ export const createTablesScript = `
       currency TEXT NOT NULL DEFAULT 'TRY',
       paid_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       split_type TEXT NOT NULL DEFAULT 'equal',
+      notes TEXT,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -61,6 +62,16 @@ export const createTablesScript = `
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       amount REAL NOT NULL,
       shares INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS expense_attachments (
+      id TEXT PRIMARY KEY,
+      expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
     CREATE TABLE IF NOT EXISTS settlements (
@@ -132,6 +143,26 @@ function migrate(db: Database.Database) {
       }
     })();
   }
+
+  // Migrate expenses table to add notes column
+  const expenseCols = db.prepare("PRAGMA table_info(expenses)").all() as Array<{ name: string }>;
+  const expenseColNames = new Set(expenseCols.map((c) => c.name));
+  if (!expenseColNames.has("notes")) {
+    db.exec("ALTER TABLE expenses ADD COLUMN notes TEXT");
+  }
+
+  // Migrate to create expense_attachments table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS expense_attachments (
+      id TEXT PRIMARY KEY,
+      expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+  `);
 }
 
 export function getDb(): Database.Database {

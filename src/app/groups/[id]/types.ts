@@ -19,6 +19,16 @@ export interface ExpenseSplit {
   email: string;
 }
 
+export interface Attachment {
+  id: string;
+  expense_id: string;
+  file_path: string;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  created_at: number;
+}
+
 export interface Expense {
   id: string;
   title: string;
@@ -26,10 +36,12 @@ export interface Expense {
   currency: string;
   paid_by: string;
   split_type: string;
+  notes: string | null;
   created_at: number;
   payer_name: string | null;
   payer_email: string;
   splits: ExpenseSplit[];
+  attachments: Attachment[];
 }
 
 export interface Balance {

@@ -35,10 +35,10 @@ describe("POST /api/groups/[id]/expenses", () => {
   it("returns 401 when unauthenticated", async () => {
     (auth as unknown as Mock).mockResolvedValue(null);
 
+    const formData = new FormData();
     const req = new NextRequest("http://localhost/api/groups/g1/expenses", {
       method: "POST",
-      body: JSON.stringify({}),
-      headers: { "content-type": "application/json" },
+      body: formData,
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: "g1" }) });
@@ -48,20 +48,20 @@ describe("POST /api/groups/[id]/expenses", () => {
   });
 
   it("returns 400 for invalid currency", async () => {
+    const formData = new FormData();
+    formData.append("title", "Dinner");
+    formData.append("amount", "120");
+    formData.append("currency", "JPY");
+    formData.append("paidBy", "u1");
+    formData.append("splitType", "equal");
+    formData.append("splitWith", JSON.stringify([
+      { userId: "u1", shares: 1 },
+      { userId: "u2", shares: 1 },
+    ]));
+
     const req = new NextRequest("http://localhost/api/groups/g1/expenses", {
       method: "POST",
-      body: JSON.stringify({
-        title: "Dinner",
-        amount: 120,
-        currency: "JPY",
-        paidBy: "u1",
-        splitType: "equal",
-        splitWith: [
-          { userId: "u1", shares: 1 },
-          { userId: "u2", shares: 1 },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
+      body: formData,
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: "g1" }) });
@@ -77,34 +77,35 @@ describe("POST /api/groups/[id]/expenses", () => {
       .mockReturnValueOnce("split-2")
       .mockReturnValueOnce("split-3");
 
+    const formData = new FormData();
+    formData.append("title", "Market");
+    formData.append("amount", "10");
+    formData.append("currency", "USD");
+    formData.append("paidBy", "u1");
+    formData.append("splitType", "shares");
+    formData.append("splitWith", JSON.stringify([
+      { userId: "u1", shares: 1 },
+      { userId: "u2", shares: 2 },
+      { userId: "u3", shares: 3 },
+    ]));
+
     const req = new NextRequest("http://localhost/api/groups/g1/expenses", {
       method: "POST",
-      body: JSON.stringify({
-        title: "Market",
-        amount: 10,
-        currency: "USD",
-        paidBy: "u1",
-        splitType: "shares",
-        splitWith: [
-          { userId: "u1", shares: 1 },
-          { userId: "u2", shares: 2 },
-          { userId: "u3", shares: 3 },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
+      body: formData,
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: "g1" }) });
 
     expect(res.status).toBe(201);
 
-    const expense = db.prepare("SELECT id, title, amount, currency, paid_by, split_type FROM expenses WHERE id = ?").get("expense-1") as {
+    const expense = db.prepare("SELECT id, title, amount, currency, paid_by, split_type, notes FROM expenses WHERE id = ?").get("expense-1") as {
       id: string;
       title: string;
       amount: number;
       currency: string;
       paid_by: string;
       split_type: string;
+      notes: string | null;
     };
     expect(expense).toEqual({
       id: "expense-1",
@@ -113,6 +114,7 @@ describe("POST /api/groups/[id]/expenses", () => {
       currency: "USD",
       paid_by: "u1",
       split_type: "shares",
+      notes: null,
     });
 
     const splits = db

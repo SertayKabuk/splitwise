@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { getGroupMembership, getGroupById, getGroupMembers } from "@/lib/repositories/groupRepository";
-import { getExpensesByGroupId, getExpenseSplitsByGroupId } from "@/lib/repositories/expenseRepository";
+import { getExpensesByGroupId, getExpenseSplitsByGroupId, getAttachmentsByGroupId } from "@/lib/repositories/expenseRepository";
 import { getSettlementsByGroupId } from "@/lib/repositories/settlementRepository";
 import { calculateBalances } from "@/lib/balance";
 import GroupPageClient from "./GroupPageClient";
@@ -53,6 +53,7 @@ export default async function GroupPage({ params }: PageProps) {
   const rawExpenses = getExpensesByGroupId(groupId);
 
   const rawSplits = getExpenseSplitsByGroupId(groupId);
+  const rawAttachments = getAttachmentsByGroupId(groupId);
 
   const splitsByExpense: Record<string, typeof rawSplits> = {};
   for (const split of rawSplits) {
@@ -60,9 +61,16 @@ export default async function GroupPage({ params }: PageProps) {
     splitsByExpense[split.expense_id].push(split);
   }
 
+  const attachmentsByExpense: Record<string, typeof rawAttachments> = {};
+  for (const att of rawAttachments) {
+    if (!attachmentsByExpense[att.expense_id]) attachmentsByExpense[att.expense_id] = [];
+    attachmentsByExpense[att.expense_id].push(att);
+  }
+
   const expenses = rawExpenses.map((e) => ({
     ...e,
     splits: splitsByExpense[e.id] ?? [],
+    attachments: attachmentsByExpense[e.id] ?? [],
   }));
 
   // Fetch settlements
